@@ -1,14 +1,17 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.repl;
 
 import org.aya.pretty.doc.Doc;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 public interface ReplUtil {
   static @NotNull Command.Result invokeHelp(CommandManager commandManager, @Nullable HelpItem argument) {
@@ -16,7 +19,7 @@ public interface ReplUtil {
       return commandManager.cmd.find(c -> c.owner().names().contains(argument.cmd))
         .getOrElse(
           it -> Command.Result.ok(it.owner().help(), true),
-          () -> Command.Result.err(STR."No such command: \{argument.cmd}", true));
+          () -> Command.Result.err("No such command: " + argument.cmd, true));
     }
     var commands = Doc.vcat(commandManager.cmd.view()
       .map(command -> Doc.sep(
@@ -42,5 +45,13 @@ public interface ReplUtil {
       .append(x)
       .style(AttributedStyle.DEFAULT)
       .toAnsi();
+  }
+
+  static @NotNull Consumer<String> jlineDumbTerminalWriter() throws IOException {
+    var terminal = TerminalBuilder.builder().jni(true).dumb(true).build();
+    return s -> {
+      terminal.writer().println(s);
+      terminal.flush();
+    };
   }
 }

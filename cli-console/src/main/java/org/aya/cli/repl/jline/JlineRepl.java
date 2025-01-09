@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.repl.jline;
 
@@ -8,7 +8,7 @@ import org.aya.cli.interactive.ReplConfig;
 import org.aya.cli.render.RenderOptions;
 import org.aya.cli.repl.AyaRepl;
 import org.aya.cli.repl.gk.GKReplLexer;
-import org.aya.generic.util.AyaHome;
+import org.aya.generic.AyaHome;
 import org.aya.parser.AyaParserDefinitionBase;
 import org.aya.prettier.BasePrettier;
 import org.aya.pretty.backend.string.StringPrinterConfig;
@@ -44,7 +44,7 @@ public final class JlineRepl extends AyaRepl {
   public JlineRepl(@NotNull ImmutableSeq<Path> modulePaths, @NotNull ReplConfig config) throws IOException {
     super(modulePaths, config);
     terminal = TerminalBuilder.builder()
-      .jansi(true)
+      .jni(true)
       .jna(false)
       .build();
     lineReader = LineReaderBuilder.builder()
@@ -68,9 +68,11 @@ public final class JlineRepl extends AyaRepl {
       ))
       .variable(LineReader.HISTORY_FILE, AyaHome.ayaHome().resolve("history"))
       .variable(LineReader.SECONDARY_PROMPT_PATTERN, "| ")
+      .variable(LineReader.INSERT_CLOSE_PAREN, true)
+      .variable(LineReader.INSERT_CLOSE_SQUARE, true)
       .build();
     prettyPrintWidth = widthOf(terminal);
-    terminal.handle(Terminal.Signal.WINCH, signal -> prettyPrintWidth = widthOf(terminal));
+    terminal.handle(Terminal.Signal.WINCH, _ -> prettyPrintWidth = widthOf(terminal));
   }
 
   private int widthOf(@NotNull Terminal terminal) {

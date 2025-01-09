@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.util.terck;
 
@@ -19,7 +19,7 @@ import org.jetbrains.annotations.NotNull;
 public sealed interface Relation extends Docile, Selector.Candidate<Relation> {
   /** increase or unrelated of callee argument wrt. caller parameter. */
   enum Unknown implements Relation {
-    INSTANCE;
+    INSTANCE
   }
 
   /**
@@ -34,8 +34,8 @@ public sealed interface Relation extends Docile, Selector.Candidate<Relation> {
   @Override default @NotNull Doc toDoc() {
     return switch (this) {
       case Decrease d when d.size == 0 -> Doc.plain("  =");
-      case Decrease d -> Doc.plain(STR."\{d.usable ? " " : "!"}-\{d.size}");
-      case Unknown ignored -> Doc.plain("  ?");
+      case Decrease d -> Doc.plain((d.usable ? " " : "!") + "-" + d.size);
+      case Unknown _ -> Doc.plain("  ?");
     };
   }
 
@@ -43,7 +43,7 @@ public sealed interface Relation extends Docile, Selector.Candidate<Relation> {
     if (rhs instanceof Unknown) return rhs;
     return switch (this) {
       case Unknown lhs -> lhs;
-      case Decrease l when rhs instanceof Decrease r -> decr(l.usable || r.usable, l.size + r.size);
+      case Decrease l when rhs instanceof Decrease(boolean usable, int size) -> decr(l.usable || usable, l.size + size);
       default -> throw new AssertionError("unreachable");
     };
   }
@@ -81,7 +81,7 @@ public sealed interface Relation extends Docile, Selector.Candidate<Relation> {
   }
 
   default boolean isDecreasing() {
-    return this instanceof Decrease d && d.usable && d.size > 0;
+    return this instanceof Decrease(boolean usable, int size) && usable && size > 0;
   }
 
   static @NotNull Relation fromCompare(int compare) {

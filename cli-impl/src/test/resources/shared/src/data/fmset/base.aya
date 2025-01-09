@@ -1,0 +1,21 @@
+open import relation::binary::path
+
+open inductive FMSet (A : Type)
+| []
+| infixr :] A (FMSet A) tighter =
+| comm (x y : A) (xs : FMSet A) : x :] y :] xs = y :] x :] xs
+
+variable A : Type
+
+overlap def infixr ++ (xs ys : FMSet A) : FMSet A
+| [], _ => ys
+| _, [] => xs
+| x :] xs', _ => x :] xs' ++ ys
+| comm x y xs' i, _ => comm x y (xs' ++ ys) i
+tighter :] =
+
+@suppress(MostGeneralSolution)
+def ++-assoc {xs ys zs : FMSet A} : xs ++ (ys ++ zs) = (xs ++ ys) ++ zs elim xs
+| [] => refl
+| x :] xs' => pmap (x :]) ++-assoc
+| comm x y xs' i => fn j => comm x y (++-assoc j) i

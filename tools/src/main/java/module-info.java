@@ -1,11 +1,12 @@
 module aya.util {
-  requires aya.ij.util.text;
-  requires aya.pretty;
+  requires transitive aya.ij.util.text;
+  requires transitive aya.pretty;
 
   requires static org.jetbrains.annotations;
   requires transitive kala.collection;
 
   exports org.aya.util.error;
+  exports org.aya.util.error.pretty;
   exports org.aya.util.prettier;
   exports org.aya.util.reporter;
   exports org.aya.util.tyck;

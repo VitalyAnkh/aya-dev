@@ -1,0 +1,24 @@
+{
+  "ayaVersion": "0.32",
+  "group": "org.aya-prover",
+  "name": "tests",
+  "version": "0.1.0",
+
+  "literate": {
+    "linkPrefix": "/aya-prover/cli-impl/src/test/resources/shared/build/pretty/",
+    "pretty": {
+      "prettierOptions": {
+        "map": {
+          "InlineMetas": true,
+          "ShowImplicitArgs": false,
+          "ShowImplicitPats": true,
+          "ShowLambdaTypes": false
+        }
+      },
+      "renderOptions": {
+        "colorScheme": "Emacs",
+        "styleFamily": "Default"
+      }
+    }
+  }
+}

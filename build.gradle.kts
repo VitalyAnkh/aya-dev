@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 import org.apache.tools.ant.taskdefs.condition.Os
 import org.aya.gradle.BuildUtil
@@ -22,7 +22,7 @@ projectVersion = libs.versions.project.get()
 javaVersion = libs.versions.java.get().toInt()
 
 // Workaround that `libs` is not available in `jacoco {}` block
-var jacocoVersion = libs.versions.jacoco.get()
+var jacocoVersion: String = libs.versions.jacoco.get()
 
 // Platforms we build jlink-ed aya for:
 // The "current" means the "current platform", as it is unnecessary to detect what the current system is,
@@ -51,7 +51,7 @@ allprojects {
   version = projectVersion
 }
 
-val useJacoco = listOf("base", "pretty", "cli-impl")
+val useJacoco = listOf("base", "syntax", "producer", "pretty", "cli-impl", "jit-compiler", "tools")
 
 /** gradle.properties or environmental variables */
 fun propOrEnv(name: String): String =
@@ -97,9 +97,7 @@ subprojects {
     modularity.inferModulePath.set(true)
 
     options.apply {
-      encoding = "UTF-8"
       isDeprecation = true
-      release.set(javaVersion)
       compilerArgs.addAll(listOf("-Xlint:unchecked", "--enable-preview"))
     }
 
@@ -112,9 +110,10 @@ subprojects {
       tree.include("module-info.class")
       tree.forEach {
         BuildUtil.stripPreview(
-          root.toPath(), it.toPath(),
-          true, false,
-          "java/lang/RuntimeException",
+          /* root = */ root.toPath(),
+          /* classFile = */ it.toPath(),
+          /* forceJava21 = */ true,
+          /* verbose = */ false,
         )
       }
     }
@@ -126,7 +125,6 @@ subprojects {
     options.addBooleanOption("-enable-preview", true)
     options.addStringOption("-source", javaVersion.toString())
     options.addStringOption("Xdoclint:none", "-quiet")
-    options.encoding("UTF-8")
     options.tags(
       "apiNote:a:API Note:",
       "implSpec:a:Implementation Requirements:",

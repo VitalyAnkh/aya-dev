@@ -1,0 +1,22 @@
+open import Nat::Core
+
+open inductive Vec Type Nat : Type
+| A, 0 => vnil
+| A, suc m => infixr :> A (Vec A m)
+
+variable A : Type
+variable n m : Nat
+
+// This definition is explicitly tested in the test suite
+// Do not change
+def test (xs' : Vec A n) (ys' : Vec A m) : Nat
+| vnil, ys => 0
+| x :> xs, ys => 0
+
+def testBetter (xs : Vec A n) (ys : Vec A m) : Nat elim xs
+| vnil => 0
+| x :> xs' => 0
+
+open inductive List (A : Type) | nil | infixr :< A (List A)
+
+def arr : List Nat => [ 1, 2, 3 ]

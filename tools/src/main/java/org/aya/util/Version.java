@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.util;
 
@@ -9,9 +9,6 @@ import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.regex.Pattern;
 
-/**
- * @author ice1000
- */
 public record Version(
   @NotNull BigInteger major,
   @NotNull BigInteger minor,
@@ -24,7 +21,7 @@ public record Version(
     if (version.endsWith("-SNAPSHOT")) version = version.substring(0, version.length() - "-SNAPSHOT".length());
     var split = DOT.split(version.trim());
     return switch (split.length) {
-      case 0 -> throw new IllegalArgumentException(STR."Invalid version: \{version}");
+      case 0 -> throw new IllegalArgumentException("Invalid version: " + version);
       case 1 -> new Version(new BigInteger(split[0]), BigInteger.ZERO, BigInteger.ZERO);
       case 2 -> new Version(new BigInteger(split[0]), new BigInteger(split[1]), BigInteger.ZERO);
       default -> new Version(new BigInteger(split[0]), new BigInteger(split[1]), new BigInteger(split[2]));
@@ -41,15 +38,15 @@ public record Version(
 
   @Contract(pure = true)
   public @NotNull String getLongString() {
-    return STR."\{major}.\{minor}.\{patch}";
+    return major + "." + minor + "." + patch;
   }
 
   @Override public String toString() {
     return BigInteger.ZERO.equals(patch)
       ? BigInteger.ZERO.equals(minor)
       ? major.toString()
-      : STR."\{major}.\{minor}"
-      : STR."\{major}.\{minor}.\{patch}";
+      : major + "." + minor
+      : major + "." + minor + "." + patch;
   }
 
   @Override public int compareTo(Version o) {

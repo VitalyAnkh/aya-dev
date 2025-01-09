@@ -16,27 +16,27 @@ public class MdStyleTest {
     assertEquals("""
       # H1
       [Click me](https://google.com)
-            
+      
       ## H2
       ### H3
       #### H4
       ##### H5
       ###### H6
       > BlockQuote
-            
+      
       1\\. fake list
-            
+      
       I love Java.I love Aya.I love Aya's pretty printer.I love Java
-            
+      
       I love Aya
-            
+      
       I love Aya's pretty printer.
-            
+      
       ```aya
-      data Nat | zero | suc Nat
+      inductive Nat | zero | suc Nat
       ```
       Look! She is beautiful
-            
+      
       """.stripIndent(), doc().renderToMd());
   }
 
@@ -58,7 +58,7 @@ public class MdStyleTest {
       Doc.styled(MdStyle.GFM.Paragraph, "I love Java"),
       Doc.styled(MdStyle.GFM.Paragraph, "I love Aya"),
       Doc.styled(MdStyle.GFM.Paragraph, "I love Aya's pretty printer."),
-      Doc.codeBlock(Language.Builtin.Aya, "data Nat | zero | suc Nat"),
+      Doc.codeBlock(Language.Builtin.Aya, "inductive Nat | zero | suc Nat"),
       Doc.styled(MdStyle.GFM.Paragraph, "Look! She is beautiful")
     );
   }
@@ -114,12 +114,12 @@ public class MdStyleTest {
   public void testList() {
     assertEquals("""
       - first
-        
+      
         third
       - fourth
         - 4.1
         - 4.2
-            
+      
       """.stripIndent(), bulletList().renderToMd().stripIndent());
     assertEquals("""
       1. first

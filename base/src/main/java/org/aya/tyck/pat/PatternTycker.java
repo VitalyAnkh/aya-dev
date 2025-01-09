@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2025 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.tyck.pat;
 
@@ -6,317 +6,514 @@ import kala.collection.SeqView;
 import kala.collection.immutable.ImmutableSeq;
 import kala.collection.mutable.MutableList;
 import kala.control.Result;
-import kala.tuple.Tuple;
-import kala.tuple.Tuple3;
 import kala.value.MutableValue;
-import org.aya.concrete.Expr;
-import org.aya.concrete.Pattern;
-import org.aya.core.def.CtorDef;
-import org.aya.core.def.Def;
-import org.aya.core.pat.Pat;
-import org.aya.core.pat.PatMatcher;
-import org.aya.core.repr.AyaShape;
-import org.aya.core.term.*;
-import org.aya.core.visitor.DeltaExpander;
-import org.aya.core.visitor.Expander;
-import org.aya.core.visitor.Subst;
 import org.aya.generic.Constants;
-import org.aya.generic.util.NormalizeMode;
-import org.aya.pretty.doc.Doc;
-import org.aya.ref.AnyVar;
-import org.aya.ref.GenerateKind;
-import org.aya.ref.LocalVar;
+import org.aya.generic.Renamer;
+import org.aya.generic.State;
+import org.aya.generic.term.DTKind;
+import org.aya.normalize.Normalizer;
+import org.aya.syntax.compile.JitCon;
+import org.aya.syntax.compile.JitData;
+import org.aya.syntax.concrete.Pattern;
+import org.aya.syntax.concrete.stmt.decl.DataDecl;
+import org.aya.syntax.core.Jdg;
+import org.aya.syntax.core.def.*;
+import org.aya.syntax.core.pat.Pat;
+import org.aya.syntax.core.pat.PatMatcher;
+import org.aya.syntax.core.pat.PatToTerm;
+import org.aya.syntax.core.repr.AyaShape;
+import org.aya.syntax.core.repr.CodeShape;
+import org.aya.syntax.core.term.*;
+import org.aya.syntax.core.term.call.ConCallLike;
+import org.aya.syntax.core.term.call.DataCall;
+import org.aya.syntax.ref.LocalVar;
 import org.aya.tyck.ExprTycker;
-import org.aya.tyck.error.TyckOrderError;
-import org.aya.tyck.trace.Trace;
-import org.aya.tyck.tycker.TyckState;
+import org.aya.tyck.TyckState;
+import org.aya.tyck.ctx.LocalLet;
+import org.aya.tyck.error.PatternProblem;
+import org.aya.tyck.pat.iter.PatternIterator;
+import org.aya.tyck.pat.iter.Pusheenable;
+import org.aya.tyck.pat.iter.SignatureIterator;
+import org.aya.tyck.tycker.Problematic;
+import org.aya.tyck.tycker.Stateful;
 import org.aya.util.Arg;
-import org.aya.util.error.InternalException;
+import org.aya.util.error.Panic;
+import org.aya.util.error.SourcePos;
+import org.aya.util.error.WithPos;
 import org.aya.util.reporter.Problem;
+import org.aya.util.reporter.Reporter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
 
+import java.util.Objects;
+import java.util.function.Predicate;
+
 /**
- * A Pattern Tycker for only one use.
+ * Tyck for {@link Pattern}'s, the left hand side of one clause.
  */
-public final class PatternTycker {
-  public final @NotNull ExprTycker exprTycker;
-  public final @NotNull TypedSubst bodySubst;
-  private final @NotNull TypedSubst sigSubst = new TypedSubst();
-  private @NotNull Def.Signature<?> signature;
-  private @NotNull SeqView<Arg<Pattern>> patterns;
-  private final @NotNull MutableList<Arg<Pat>> wellTyped = MutableList.create();
-  private Term.@UnknownNullability Param currParam = null;
+public class PatternTycker implements Problematic, Stateful {
+  private final @NotNull ExprTycker exprTycker;
+  private final boolean allowImplicit;
+  /// A bound telescope (i.e. all the reference to the former parameter are
+  /// [org.aya.syntax.core.term.LocalTerm])
+  private final @NotNull SignatureIterator telescope;
+
+  /** Substitution for parameter, in the same order as parameter */
+  private final @NotNull MutableList<Jdg> paramSubst;
+
+  /// Substitution for `as` pattern
+  private final @NotNull LocalLet asSubst;
+
+  /// Almost equivalent to {@code telescope.peek()}, but we may instantiate it.
+  ///
+  /// @see #instCurrentParam()
+  private @UnknownNullability Param currentParam = null;
   private boolean hasError = false;
-
-  private PatternTycker(@NotNull ExprTycker exprTycker,
-                        @NotNull TypedSubst bodySubst,
-                        @NotNull Def.Signature<?> signature,
-                        @NotNull SeqView<Arg<Pattern>> patterns) {
-    this.exprTycker = exprTycker;
-    this.bodySubst = bodySubst;
-    this.signature = signature;
-    this.patterns = patterns;
-  }
-
-  public PatternTycker(@NotNull ExprTycker exprTycker,
-                       @NotNull Def.Signature<?> signature,
-                       @NotNull SeqView<Arg<Pattern>> patterns) {
-    this(exprTycker, new TypedSubst(), signature, patterns);
-  }
+  private final @NotNull Renamer nameGen;
 
   /**
-   * <strong>do</strong> tyck the {@param pattern} against the type {@param term}
-   *
-   * @return well typed pattern
+   * @see #tyckInner(ImmutableSeq, ImmutableSeq, WithPos)
    */
-  private @NotNull Pat doTyck(@NotNull Pattern pattern, @NotNull Term term) {
-    return switch (pattern) {
-      case Pattern.Absurd absurd -> {
-        var selection = selectCtor(term, null, absurd);
-        if (selection != null) foundError(new PatternProblem.PossiblePat(absurd, selection.component3()));
-        yield Pat.Absurd.INSTANCE;
-      }
-      case Pattern.Tuple tuple -> {
-        if (!(term.normalize(exprTycker.state, NormalizeMode.WHNF) instanceof SigmaTerm sigma))
-          yield withError(new PatternProblem.TupleNonSig(tuple, term), term);
-        // sig.result is a dummy term
-        var sig = new Def.Signature<>(sigma.params(),
-          new ErrorTerm(Doc.plain("Rua"), false));
-        yield new Pat.Tuple(
-          tyckInner(sig, tuple.patterns().view(), tuple)
-            .wellTyped());
-      }
-      case Pattern.Ctor ctor -> {
-        var var = ctor.resolved().data();
-        var realCtor = selectCtor(term, var, ctor);
-        if (realCtor == null) yield randomPat(term);
-        var ctorRef = realCtor.component3().ref();
-        var ctorCore = ctorRef.core;
+  private PatternTycker(
+    @NotNull ExprTycker tycker,
+    @NotNull SignatureIterator tele,
+    @NotNull LocalLet sub,
+    @NotNull Renamer nameGen
+  ) {
+    this(tycker, tele, sub, true, nameGen);
+  }
 
-        final var dataCall = realCtor.component1();
-        var sig = new Def.Signature<>(Term.Param.subst(ctorCore.selfTele, realCtor.component2(), 0), dataCall);
-        // It is possible that `ctor.params()` is empty.
-        var patterns = tyckInner(sig, ctor.params().view(), ctor).wellTyped;
+  public PatternTycker(
+    @NotNull ExprTycker exprTycker,
+    @NotNull SignatureIterator telescope,
+    @NotNull LocalLet asSubst,
+    boolean allowImplicit,
+    @NotNull Renamer nameGen
+  ) {
+    this.exprTycker = exprTycker;
+    this.telescope = telescope;
+    this.paramSubst = MutableList.create();
+    this.asSubst = asSubst;
+    this.allowImplicit = allowImplicit;
+    this.nameGen = nameGen;
+    nameGen.store(exprTycker.localCtx());
+  }
 
-        // check if this Ctor is a ShapedCtor
-        var typeRecog = exprTycker.shapeFactory.find(ctorRef.core.dataRef.core).getOrNull();
+  public record TyckResult(
+    @NotNull ImmutableSeq<Pat> wellTyped,
+    @NotNull ImmutableSeq<Jdg> paramSubst,
+    @NotNull LocalLet asSubst,
+    boolean hasError
+  ) { }
 
-        yield new Pat.Ctor(realCtor.component3().ref(), patterns, typeRecog, dataCall);
-      }
-      case Pattern.Bind(var pos, var bind, var tyExpr, var tyRef) -> {
-        exprTycker.ctx.put(bind, term);
-        // In case of errors, never touch anything related to Term
-        //  because there will be ill-scoped terms and they trigger internal errors (e.g. #1016)
-        if (tyExpr != null && !hasError) exprTycker.subscoped(() -> {
-          exprTycker.definitionEqualities.addDirectly(bodySubst);
-          var syn = exprTycker.synthesize(tyExpr);
-          exprTycker.unifyTyReported(term, syn.wellTyped(), tyExpr);
-          return null;
-        });
-        tyRef.set(term);
-        yield new Pat.Bind(bind, term);
-      }
-      case Pattern.CalmFace(var pos) -> new Pat.Meta(MutableValue.create(),
-        new LocalVar(Constants.ANONYMOUS_PREFIX, pos, GenerateKind.Anonymous.INSTANCE), term);
-      case Pattern.Number(var pos, var number) -> {
-        var ty = term.normalize(exprTycker.state, NormalizeMode.WHNF);
-        if (ty instanceof DataCall dataCall) {
-          var data = dataCall.ref().core;
-          var shape = exprTycker.shapeFactory.find(data);
-          if (shape.isDefined() && shape.get().shape() == AyaShape.NAT_SHAPE)
-            yield new Pat.ShapedInt(number, shape.get(), dataCall);
+  /**
+   * Tyck a {@param type} against {@param type}
+   *
+   * @param pattern a concrete {@link Pattern}
+   * @param type    the type of {@param pattern}, it probably contains {@link MetaPatTerm}
+   * @return a well-typed {@link Pat}, but still need to be inline!
+   */
+  private @NotNull Pat doTyck(@NotNull WithPos<Pattern> pattern, @NotNull Term type) {
+    return switch (pattern.data()) {
+      case Pattern.Absurd _ -> {
+        var selection = makeSureEmpty(type, pattern);
+        if (selection != null) {
+          foundError(new PatternProblem.PossiblePat(pattern, selection));
         }
-        yield withError(new PatternProblem.BadLitPattern(pattern, term), term);
+        yield Pat.Misc.Absurd;
       }
-      case Pattern.List(var pos, var el) -> {
-        // desugar `Pattern.List` to `Pattern.Ctor` here, but use `CodeShape` !
+      case Pattern.Tuple(var l, var r) -> {
+        if (!(exprTycker.whnf(type) instanceof DepTypeTerm(var kind, var lT, var rT) && kind == DTKind.Sigma)) {
+          var frozen = freezeHoles(type);
+          yield withError(new PatternProblem.TupleNonSig(pattern, this, frozen), frozen);
+        }
+        var lhs = doTyck(l, lT);
+        yield new Pat.Tuple(lhs, doTyck(r, rT.apply(PatToTerm.visit(lhs))));
+      }
+      case Pattern.Con con -> {
+        var realCon = makeSureAvail(type, con.resolved().data(), pattern);
+        if (realCon == null) yield randomPat(type);
+        var conCore = realCon.conHead.ref();
+
+        // It is possible that `con.params()` is empty.
+        var patterns = tyckInner(
+          conCore.selfTele(realCon.ownerArgs),
+          con.params(),
+          pattern);
+
+        // check if this Con is a ShapedCon
+        var typeRecog = state().shapeFactory.find(conCore.dataRef()).getOrNull();
+        yield new Pat.Con(conCore, patterns, realCon.conHead);
+      }
+      case Pattern.Bind bindPat -> {
+        var bind = bindPat.bind();
+        var tyRef = bindPat.type();
+
+        exprTycker.localCtx().put(bind, type);
+        tyRef.set(type);
+
+        // report after tyRef.set, the error message requires it
+        if (whnf(type) instanceof DataCall call) {
+          var unimportedCon = collectNoParamConNames(call.ref())
+            .anyMatch(it -> it.equalsIgnoreCase(bind.name()));
+          if (unimportedCon) {
+            fail(new PatternProblem.UnimportedConName(pattern.replace(bindPat)));
+          }
+        }
+
+        yield new Pat.Bind(bind, type);
+      }
+      case Pattern.CalmFace.INSTANCE -> doGeneratePattern(type, Constants.ANONYMOUS_PREFIX, pattern.sourcePos());
+      case Pattern.Number(var number) -> {
+        var ty = whnf(type);
+        if (ty instanceof DataCall dataCall) {
+          var data = dataCall.ref();
+          var shape = state().shapeFactory.find(data);
+          if (shape.isDefined() && shape.get().shape() == AyaShape.NAT_SHAPE)
+            yield new Pat.ShapedInt(number,
+              shape.get().getCon(CodeShape.GlobalId.ZERO),
+              shape.get().getCon(CodeShape.GlobalId.SUC),
+              dataCall);
+        }
+        yield withError(new PatternProblem.BadLitPattern(pattern, ty), ty);
+      }
+      case Pattern.List(var el) -> {
+        // desugar `Pattern.List` to `Pattern.Con` here, but use `CodeShape` !
         // Note: this is a special case (maybe), If there is another similar requirement,
         //       a PatternDesugarer is recommended.
-        var ty = term.normalize(exprTycker.state, NormalizeMode.WHNF);
+        var ty = whnf(type);
         if (ty instanceof DataCall dataCall) {
-          var data = dataCall.ref().core;
-          var shape = exprTycker.shapeFactory.find(data);
-          if (shape.isDefined() && shape.get().shape() == AyaShape.LIST_SHAPE)
-            yield doTyck(new Pattern.FakeShapedList(pos, el, shape.get(), dataCall)
-              .constructorForm(), term);
+          var data = dataCall.ref();
+          var shape = state().shapeFactory.find(data).getOrNull();
+          if (shape != null && shape.shape() == AyaShape.LIST_SHAPE)
+            yield doTyck(new Pattern.FakeShapedList(pattern.sourcePos(), el,
+              shape.getCon(CodeShape.GlobalId.NIL), shape.getCon(CodeShape.GlobalId.CONS), dataCall)
+              .constructorForm(), type);
         }
-        yield withError(new PatternProblem.BadLitPattern(pattern, term), term);
+        yield withError(new PatternProblem.BadLitPattern(pattern, ty), ty);
       }
-      case Pattern.As(var pos, var inner, var as, var type) -> {
-        var innerPat = doTyck(inner, term);
+      case Pattern.As(var inner, var as, var typeRef) -> {
+        var innerPat = doTyck(inner, type);
 
-        type.set(term);
-        addPatSubst(as, innerPat, term);
+        typeRef.set(type);
+        addAsSubst(as, innerPat, type);
+        // exprTycker.localCtx().put(as, type);
 
         yield innerPat;
       }
-      case Pattern.QualifiedRef ignored -> throw new InternalException("QualifiedRef patterns should be desugared");
-      case Pattern.BinOpSeq ignored -> throw new InternalException("BinOpSeq patterns should be desugared");
+      case Pattern.Salt _ -> Panic.unreachable();
+    };
+  }
+
+  private void peekNextParam() {
+    if (telescope.hasNext()) currentParam = telescope.peek();
+    else currentParam = null;
+  }
+
+  private void consumeParam() {
+    telescope.next();
+  }
+
+  private record FindNextParam(@NotNull ImmutableSeq<Pat> generated, @NotNull Kind kind) {
+    public enum Kind {
+      Success, TooManyPattern, TooManyImplicit
+    }
+  }
+
+  /// Find next param until the predicate success
+  ///
+  /// @return (generated implicit patterns, status)
+  /// @apiNote before call: {@link #currentParam} is the last checked parameter
+  ///          after call: {@link #currentParam} is the first unchecked parameter which {@param until} success on
+  private @NotNull FindNextParam findNextParam(@Nullable WithPos<Pattern> pattern, @NotNull Predicate<Param> until) {
+    var generatedPats = MutableList.<Pat>create();
+
+    peekNextParam();
+    // loop invariant: currentParam is the first unchecked parameter if not null
+    while (currentParam != null && !until.test(currentParam)) {
+      if (currentParam.explicit()) {
+        // too many implicit
+        try (var _ = instCurrentParam()) {
+          assert pattern != null;
+          foundError(new PatternProblem.TooManyImplicitPattern(pattern, currentParam));
+        }
+
+        return new FindNextParam(generatedPats.toImmutableSeq(), FindNextParam.Kind.TooManyImplicit);
+      } else {
+        // current param is implicit, generate pattern for it
+        generatedPats.append(generatePattern());
+        // we don't need to consume the parameter, cause [generatePattern] does.
+        // TODO: ^is it good?
+      }
+
+      // we consumed the last checked parameter, now look at next one
+      peekNextParam();
+    }
+
+    // no more param
+    if (currentParam == null) {
+      return new FindNextParam(generatedPats.toImmutableSeq(), FindNextParam.Kind.TooManyPattern);
+    }
+
+    return new FindNextParam(generatedPats.toImmutableSeq(), FindNextParam.Kind.Success);
+  }
+
+  public @NotNull TyckResult tyck(
+    @NotNull PatternIterator patterns,
+    @Nullable WithPos<Pattern> outerPattern
+  ) {
+    var wellTyped = MutableList.<Pat>create();
+    // last user given pattern, that is, not aya generated
+    @Nullable Arg<WithPos<Pattern>> lastPat = null;
+
+    // loop invariant: [patterns] points to the last checked pattern, same for [telescope]
+    outer:
+    while (patterns.hasNext()) {
+      var currentPat = patterns.peek();
+
+      lastPat = currentPat;
+
+      if (!currentPat.explicit() && !allowImplicit) {
+        foundError(new PatternProblem.ImplicitDisallowed(currentPat.term()));
+        return done(wellTyped);
+      }
+
+      // find the next appropriate parameter
+      var fnp = findNextParam(currentPat.term(), p ->
+        p.explicit() == currentPat.explicit());
+      // || telescope.isFromPusheen() == patterns.isFromPusheen()
+      // ^this check implies the first one
+
+      ImmutableSeq<Pat> generated = null;
+
+      switch (fnp.kind) {
+        case Success -> generated = fnp.generated;
+        case TooManyPattern -> {
+          if (patterns.isFromPusheen()) {
+            // It is fine if a pusheen pattern mismatch
+            wellTyped.appendAll(fnp.generated);
+            break outer;
+          } else {
+            // no more parameters
+            foundError(new PatternProblem.TooManyPattern(currentPat.term()));
+          }
+        }
+      }
+
+      if (generated == null) {
+        return done(wellTyped);
+      }
+
+      wellTyped.appendAll(generated);
+
+      // avoid unnecessary pusheen
+      if (patterns.isFromPusheen() && telescope.isFromPusheen()) {
+        break;
+      }
+
+      wellTyped.append(tyckPattern(currentPat.term()));
+      patterns.next();    // consume pattern
+    }
+
+    // now: ! patterns.hasNext()
+    // or patterns.hasNext() && ! telescope.hasNext() && patterns.isFromPusheen()
+    // or patterns.hasNext() && telescope.hasNext() && patterns.isFromPusheen() && telescope.isFromPusheen()
+
+    // all not pusheen patterns have their parameters
+
+    // is there any explicit parameters?
+    var generated = findNextParam(null, p ->
+      p.explicit() || telescope.isFromPusheen());
+    // ^this check implies the first one
+
+    // what kind of parameter you found?
+    if (generated.kind == FindNextParam.Kind.Success && !telescope.isFromPusheen()) {
+      // no you can't!
+      WithPos<Pattern> errorPattern = lastPat == null
+        ? Objects.requireNonNull(outerPattern)
+        : lastPat.term();
+      try (var _ = instCurrentParam()) {
+        foundError(new PatternProblem.InsufficientPattern(errorPattern, currentParam));
+      }
+      return done(wellTyped);
+    }
+
+    // it is impossible that [generated.kind] is [FindNextParam.TooManyImplicit]
+    assert generated.kind != FindNextParam.Kind.TooManyImplicit;
+
+    wellTyped.appendAll(generated.generated);
+
+    // [currentParam] = null or [telescope.isFromPusheen()]
+    return done(wellTyped);
+  }
+
+  private @NotNull Closer instCurrentParam() {
+    currentParam = currentParam.descent(t -> t.instTele(paramSubst.view().map(Jdg::wellTyped)));
+    return CLOSER;
+  }
+
+  private final Closer CLOSER = new Closer();
+  private class Closer implements AutoCloseable {
+    @Override public void close() { consumeParam(); }
+  }
+
+  /**
+   * Checking {@param pattern} with {@link PatternTycker#currentParam}
+   */
+  private @NotNull Pat tyckPattern(@NotNull WithPos<Pattern> pattern) {
+    try (var _ = instCurrentParam()) {
+      var result = doTyck(pattern, currentParam.type());
+      addArgSubst(result, currentParam.type());
+      return result;
+    }
+  }
+
+  private @NotNull Pat doGeneratePattern(@NotNull Term type, @NotNull String name, @NotNull SourcePos pos) {
+    var freshVar = nameGen.bindName(name);
+    if (exprTycker.whnf(type) instanceof DataCall dataCall) {
+      // this pattern would be a Con, it can be inferred
+      return new Pat.Meta(MutableValue.create(), freshVar.name(), dataCall, pos);
+    } else {
+      // If the type is not a DataCall, then the only available pattern is Pat.Bind
+      exprTycker.localCtx().put(freshVar, type);
+      return new Pat.Bind(freshVar, type);
+    }
+  }
+
+  /**
+   * For every implicit parameter which is not explicitly (not user given pattern) matched,
+   * we generate a MetaPat for each,
+   * so that they can be inferred during {@link ClauseTycker}
+   */
+  private @NotNull Pat generatePattern() {
+    try (var _ = instCurrentParam()) {
+      // TODO: I NEED A SOURCE POS!!
+      var pat = doGeneratePattern(currentParam.type(), currentParam.name(), SourcePos.NONE);
+      addArgSubst(pat, currentParam.type());
+      return pat;
+    }
+  }
+
+  private @NotNull ImmutableSeq<Pat> tyckInner(
+    @NotNull ImmutableSeq<Param> telescope,
+    @NotNull ImmutableSeq<Arg<WithPos<Pattern>>> patterns,
+    @NotNull WithPos<Pattern> outerPattern
+  ) {
+    var sub = new PatternTycker(exprTycker, new SignatureIterator(telescope, new Pusheenable.Const<>(ErrorTerm.DUMMY), null), asSubst, nameGen);
+    var tyckResult = sub.tyck(new PatternIterator(patterns), outerPattern);
+
+    hasError = hasError || sub.hasError;
+    return tyckResult.wellTyped;
+  }
+
+  private void addArgSubst(@NotNull Pat pattern, @NotNull Term type) {
+    paramSubst.append(new Jdg.Default(PatToTerm.visit(pattern), type));
+  }
+
+  private void addAsSubst(@NotNull LocalVar as, @NotNull Pat pattern, @NotNull Term type) {
+    asSubst.put(as, new Jdg.Default(PatToTerm.visit(pattern), type));
+  }
+
+  private @NotNull TyckResult done(@NotNull MutableList<Pat> wellTyped) {
+    return new TyckResult(wellTyped.toImmutableSeq(), paramSubst.toImmutableSeq(), asSubst, hasError);
+  }
+
+  private record Selection(
+    @NotNull DataCall data,
+    @NotNull ImmutableSeq<Term> ownerArgs,
+    @NotNull ConCallLike.Head conHead
+  ) { }
+
+  private @Nullable ConCallLike.Head makeSureEmpty(Term type, @NotNull WithPos<Pattern> pattern) {
+    if (!(exprTycker.whnf(type) instanceof DataCall dataCall)) {
+      foundError(new PatternProblem.SplittingOnNonData(pattern, type));
+      return null;
+    }
+
+    var core = dataCall.ref();
+
+    // If name != null, only one iteration of this loop is not skipped
+    for (var con : core.body()) {
+      switch (checkAvail(dataCall, con, exprTycker.state)) {
+        case Result.Ok(var subst) -> {
+          return new ConCallLike.Head(con, dataCall.ulift(), subst);
+        }
+        // Is blocked
+        case Result.Err(var st) when st == State.Stuck -> {
+          foundError(new PatternProblem.BlockedEval(pattern, dataCall));
+          return null;
+        }
+        default -> { }
+      }
+    }
+    return null;
+  }
+
+  private @Nullable Selection makeSureAvail(Term type, @NotNull ConDefLike name, @NotNull WithPos<Pattern> pattern) {
+    if (!(exprTycker.whnf(type) instanceof DataCall dataCall)) {
+      foundError(new PatternProblem.SplittingOnNonData(pattern, type));
+      return null;
+    }
+    if (!name.dataRef().equals(dataCall.ref())) {
+      foundError(new PatternProblem.UnknownCon(pattern));
+      return null;
+    }
+
+    return switch (checkAvail(dataCall, name, exprTycker.state)) {
+      case Result.Ok(var subst) -> new Selection(
+        (DataCall) dataCall.instTeleFrom(name.selfTeleSize(), subst.view()),
+        subst, new ConCallLike.Head(name, dataCall.ulift(), subst));
+      case Result.Err(_) -> {
+        // Here, name != null, and is not in the list of checked body
+        foundError(new PatternProblem.UnavailableCon(pattern, dataCall));
+        yield null;
+      }
+    };
+  }
+
+  private static @NotNull SeqView<String> collectNoParamConNames(@NotNull DataDefLike call) {
+    return switch (call) {
+      case JitData jitData -> jitData.body().view()
+        .filter(it -> it.selfTeleSize() == 0)
+        .map(AnyDef::name);
+      case DataDef.Delegate delegate -> {
+        // the core may be unchecked!
+        var concrete = (DataDecl) delegate.ref.concrete;
+        yield concrete.body.clauses.view()
+          .filter(it -> it.telescope.isEmpty())
+          .map(it -> it.ref.name());
+      }
     };
   }
 
   /**
-   * Start to tyck each {@link Pattern} with {@link Def.Signature}.
-   * {@param outerPattern} should be specified if stream is empty.
-   *
-   * @param outerPattern null if visiting the whole pattern (like `A, x, ctor a b`). This is only used for error reporting.
-   *                     For now, {@param outerPattern} is used when {@link PatternTycker#signature} is not empty
-   *                     but {@link PatternTycker#patterns} is empty, it is possible when matching parameters of Ctor.
+   * Check whether {@param con} is available under {@param type}
    */
-  public @NotNull PatternTycker.TyckResult tyck(
-    @Nullable Pattern outerPattern,
-    @Nullable Expr body
+  public static @NotNull Result<ImmutableSeq<Term>, State> checkAvail(
+    @NotNull DataCall type, @NotNull ConDefLike con, @NotNull TyckState state
   ) {
-    assert currParam == null;
-    // last pattern which user given (not aya generated)
-    @Nullable Arg<Pattern> lastPat = null;
-    while (signature.param().isNotEmpty()) {
-      currParam = signature.param().getFirst();
-      Arg<Pattern> pat;
-      // Type explicit, does not have pattern
-      if (patterns.isEmpty()) {
-        if (body instanceof Expr.Lambda(
-          var lamPos, var lamParam, var lamBody
-        ) && lamParam.explicit() == currParam.explicit()) {
-          body = lamBody;
-          var pattern = new Pattern.Bind(lamPos, lamParam.ref(), lamParam.type(), MutableValue.create());
-          pat = new Arg<>(pattern, currParam.explicit());
-        } else if (currParam.explicit()) {
-          Pattern errorPattern;
+    return switch (con) {
+      case JitCon jitCon -> jitCon.isAvailable(type.args());
+      case ConDef.Delegate conDef -> {
+        var pats = conDef.core().pats;
+        if (pats.isNotEmpty()) {
+          var matcher = new PatMatcher(true, new Normalizer(state));
+          yield matcher.apply(pats, type.args());
+        }
 
-          if (lastPat == null) {
-            assert outerPattern != null;
-            errorPattern = outerPattern;
-          } else {
-            errorPattern = lastPat.term();
-          }
-
-          foundError(new PatternProblem.InsufficientPattern(errorPattern, currParam));
-          return done(body);
-        } else {
-          // Type is implicit, does not have pattern
-          generatePat();
-          continue;
-        }
-      } else if (currParam.explicit()) {
-        // Type explicit, does have pattern
-        pat = patterns.getFirst();
-        lastPat = pat;
-        patterns = patterns.drop(1);
-        if (!pat.explicit()) {
-          foundError(new PatternProblem.TooManyImplicitPattern(pat.term(), currParam));
-          return done(body);
-        }
-      } else {
-        // Type is implicit, does have pattern
-        pat = patterns.getFirst();
-        if (pat.explicit()) {
-          // Pattern is explicit, so we leave it to the next type, do not "consume" it
-          generatePat();
-          continue;
-        } else {
-          lastPat = pat;
-          patterns = patterns.drop(1);
-        }
-        // ^ Pattern is implicit, so we "consume" it (stream.drop(1))
+        yield Result.ok(type.args());
       }
-      updateSig(pat);
-    }
-    if (patterns.isNotEmpty()) {
-      foundError(new PatternProblem
-        .TooManyPattern(patterns.getFirst().term(), signature.result().freezeHoles(exprTycker.state)));
-    }
-    return done(body);
+    };
   }
 
-  private @NotNull PatternTycker.TyckResult done(@Nullable Expr body) {
-    return new TyckResult(wellTyped.toImmutableSeq(), signature.result().subst(sigSubst.subst()), body);
+  private @NotNull Pat randomPat(Term param) {
+    return new Pat.Bind(nameGen.bindName(param), param);
   }
 
-  /**
-   * Tyck the inner patterns with a new tycker
-   */
-  private @NotNull PatternTycker.TyckResult tyckInner(
-    @NotNull Def.Signature<?> signature,
-    @NotNull SeqView<Arg<Pattern>> patterns,
-    @NotNull Pattern outerPattern
-  ) {
-    var sub = new PatternTycker(this.exprTycker, this.bodySubst, signature, patterns);
-    var result = sub.tyck(outerPattern, null);
-
-    hasError = hasError || sub.hasError;
-
-    return result;
-  }
-
-  private void onTyck(@NotNull Runnable runnable) {
-    currParam = currParam.subst(sigSubst.subst());
-    runnable.run();
-    signature = new Def.Signature<>(signature.param().drop(1), signature.result());
-  }
-
-  /**
-   * A user given pattern matches a parameter, we update the signature.
-   *
-   * @apiNote {@code data.param.explicit = arg.explicit} or the world explode.
-   */
-  private void updateSig(Arg<Pattern> arg) {
-    onTyck(() -> {
-      var type = currParam.type();
-      var pat = arg.term();
-      var res = exprTycker.traced(() -> new Trace.PatT(type, pat, pat.sourcePos()),
-        () -> doTyck(pat, type));
-      addSigSubst(currParam, res);
-      wellTyped.append(new Arg<>(res, arg.explicit()));
-    });
-  }
-
-  /**
-   * For every implicit parameter that not explicitly (not user given pattern) matched,
-   * we generate a MetaPat for each,
-   * so that they can be inferred during {@link ClauseTycker#checkLhs(ExprTycker, Pattern.Clause, Def.Signature, boolean)}
-   *
-   * @apiNote {@code data.param.explicit = false} or the world explode.
-   */
-  private void generatePat() {
-    onTyck(() -> {
-      var ref = currParam.ref();
-      Pat bind;
-      var freshVar = ref.rename();
-      if (currParam.type().normalize(exprTycker.state, NormalizeMode.WHNF) instanceof DataCall dataCall) {
-        bind = new Pat.Meta(MutableValue.create(), freshVar, dataCall);
-      } else {
-        bind = new Pat.Bind(freshVar, currParam.type());
-        exprTycker.ctx.put(freshVar, currParam.type());
-      }
-      wellTyped.append(new Arg<>(bind, false));
-      addSigSubst(currParam, bind);
-    });
-  }
-
-  /**
-   * Adding a subst for body (rhs)
-   */
-  private void addPatSubst(@NotNull AnyVar var, @NotNull Pat pat, @NotNull Term type) {
-    bodySubst.addDirectly(var, pat.toTerm(), type);
-  }
-
-  /**
-   * Adding a subst for signature and body
-   */
-  private void addSigSubst(@NotNull Term.Param param, @NotNull Pat pat) {
-    addPatSubst(param.ref(), pat, param.type());
-    sigSubst.addDirectly(param.ref(), pat.toTerm(), param.type());
-  }
-
-  /// region Error Reporting
-
-  private void foundError(@Nullable Problem problem) {
-    hasError = true;
-    if (problem != null) exprTycker.reporter.report(problem);
-  }
+  // region Error Reporting
+  @Override public @NotNull Reporter reporter() { return exprTycker.reporter; }
+  @Override public @NotNull TyckState state() { return exprTycker.state; }
 
   private @NotNull Pat withError(Problem problem, Term param) {
     foundError(problem);
@@ -324,79 +521,9 @@ public final class PatternTycker {
     return randomPat(param);
   }
 
-  public boolean hasError() {
-    return hasError;
+  private void foundError(@Nullable Problem problem) {
+    hasError = true;
+    if (problem != null) fail(problem);
   }
-
-  /// endregion
-
-  /// region Helper
-
-  private @NotNull Pat randomPat(Term param) {
-    return new Pat.Bind(new LocalVar("?"), param);
-  }
-
-  /**
-   * @param name if null, the selection will be performed on all constructors
-   * @return null means selection failed
-   */
-  private @Nullable Tuple3<DataCall, Subst, ConCall.Head>
-  selectCtor(Term param, @Nullable AnyVar name, @NotNull Pattern pos) {
-    if (!(param.normalize(exprTycker.state, NormalizeMode.WHNF) instanceof DataCall dataCall)) {
-      foundError(new PatternProblem.SplittingOnNonData(pos, param));
-      return null;
-    }
-    var dataRef = dataCall.ref();
-    // We are checking an absurd pattern, but the data is not yet fully checked
-    var core = dataRef.core;
-    if (core == null && name == null) {
-      foundError(new TyckOrderError.NotYetTyckedError(pos.sourcePos(), dataRef));
-      return null;
-    }
-    var body = Def.dataBody(dataRef);
-    for (var ctor : body) {
-      if (name != null && ctor.ref() != name) continue;
-      var matchy = mischa(dataCall, ctor, exprTycker.state);
-      if (matchy.isOk()) {
-        return Tuple.of(dataCall, matchy.get(), dataCall.conHead(ctor.ref()));
-      }
-      // For absurd pattern, we look at the next constructor
-      if (name == null) {
-        // Is blocked
-        if (matchy.getErr()) {
-          foundError(new PatternProblem.BlockedEval(pos, dataCall));
-          return null;
-        }
-        continue;
-      }
-      // Since we cannot have two constructors of the same name,
-      // if the name-matching constructor mismatches the type,
-      // we get an error.
-      foundError(new PatternProblem.UnavailableCtor(pos, dataCall));
-      return null;
-    }
-    // Here, name != null, and is not in the list of checked body
-    if (core == null) {
-      foundError(new TyckOrderError.NotYetTyckedError(pos.sourcePos(), name));
-      return null;
-    }
-    if (name != null) foundError(new PatternProblem.UnknownCtor(pos));
-    return null;
-  }
-
-  public static Result<Subst, Boolean> mischa(DataCall dataCall, CtorDef ctor, @NotNull TyckState state) {
-    if (ctor.pats.isNotEmpty()) {
-      return PatMatcher.tryBuildSubst(true, ctor.pats, dataCall.args(), new Expander.WHNFer(state));
-    } else {
-      return Result.ok(DeltaExpander.buildSubst(Def.defTele(dataCall.ref()), dataCall.args()));
-    }
-  }
-
-  /// endregion
-
-  public record TyckResult(
-    @NotNull ImmutableSeq<Arg<Pat>> wellTyped,
-    @NotNull Term codomain,
-    @UnknownNullability Expr newBody
-  ) {}
+  // endregion Error Reporting
 }

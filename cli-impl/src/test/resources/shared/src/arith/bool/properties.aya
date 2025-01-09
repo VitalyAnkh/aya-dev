@@ -1,0 +1,14 @@
+open import arith::bool::base
+open import relation::binary::path
+
+def not-not (b : Bool) : not (not b) = b
+| true => refl
+| false => refl
+
+def not-distrib-∨ (a b : Bool) : not (a ∨ b) = not a ∧ not b elim a
+| true => refl
+| false => refl
+
+def not-distrib-∧ (a b : Bool) : not (a ∧ b) = not a ∨ not b elim a
+| true => refl
+| false => refl

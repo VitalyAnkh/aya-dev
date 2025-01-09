@@ -1,17 +1,15 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.utils;
 
 import kala.collection.immutable.ImmutableSeq;
 import kala.function.CheckedRunnable;
 import org.aya.cli.single.CompilerFlags;
-import org.aya.core.def.GenericDef;
-import org.aya.core.serde.CompiledAya;
-import org.aya.core.serde.Serializer;
-import org.aya.util.error.InternalException;
-import org.aya.generic.util.InterruptException;
+import org.aya.compiler.CompiledModule;
+import org.aya.generic.InterruptException;
 import org.aya.resolve.ResolveInfo;
-import org.aya.resolve.module.FileModuleLoader;
+import org.aya.syntax.core.def.TyckDef;
+import org.aya.util.error.Panic;
 import org.aya.util.reporter.CountingReporter;
 import org.jetbrains.annotations.NotNull;
 
@@ -28,8 +26,8 @@ public class CompilerUtil {
   ) throws IOException {
     try {
       block.runChecked();
-    } catch (InternalException e) {
-      FileModuleLoader.handleInternalError(e);
+    } catch (Panic e) {
+      handleInternalError(e);
       reporter.reportString("Internal error");
       return e.exitCode();
     } catch (InterruptException e) {
@@ -37,29 +35,36 @@ public class CompilerUtil {
       if (flags.interruptedTrace()) e.printStackTrace();
     }
     if (reporter.noError()) {
-      reporter.reportString(flags.message().successNotion());
+      reporter.reportString(flags.message().successNotation());
       return 0;
     } else {
       reporter.reportString(reporter.countToString());
-      reporter.reportString(flags.message().failNotion());
+      reporter.reportString(flags.message().failNotation());
       return 1;
     }
   }
 
-  public static void saveCompiledCore(
-    @NotNull Path coreFile,
-    @NotNull ResolveInfo resolveInfo,
-    @NotNull ImmutableSeq<GenericDef> defs,
-    @NotNull Serializer.State state
+  public static @NotNull CompiledModule saveCompiledCore(
+    @NotNull Path coreFile, @NotNull ImmutableSeq<TyckDef> defs,
+    @NotNull ResolveInfo resolveInfo
   ) throws IOException {
-    var compiledAya = CompiledAya.from(resolveInfo, defs, state);
+    var compiledAya = CompiledModule.from(resolveInfo, defs);
     try (var outputStream = coreWriter(coreFile)) {
       outputStream.writeObject(compiledAya);
     }
+
+    return compiledAya;
   }
 
   private static @NotNull ObjectOutputStream coreWriter(@NotNull Path coreFile) throws IOException {
     Files.createDirectories(coreFile.toAbsolutePath().getParent());
     return new ObjectOutputStream(Files.newOutputStream(coreFile));
+  }
+  public static void handleInternalError(@NotNull Panic e) {
+    e.printStackTrace();
+    e.printHint();
+    System.err.println("""
+      Please report the stacktrace to the developers so a better error handling could be made.
+      Don't forget to inform the version of Aya you're using and attach your code for reproduction.""");
   }
 }

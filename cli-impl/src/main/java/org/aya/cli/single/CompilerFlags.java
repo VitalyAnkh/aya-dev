@@ -1,8 +1,8 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.single;
 
-import kala.collection.SeqLike;
+import kala.collection.SeqView;
 import org.aya.cli.render.RenderOptions;
 import org.aya.cli.utils.CliEnums;
 import org.aya.prettier.AyaPrettierOptions;
@@ -18,7 +18,7 @@ public record CompilerFlags(
   boolean interruptedTrace,
   boolean remake,
   @Nullable CompilerFlags.PrettyInfo prettyInfo,
-  @NotNull SeqLike<Path> modulePaths,
+  @NotNull SeqView<Path> modulePaths,
   @Nullable Path outputFile
 ) {
   public static @Nullable CompilerFlags.PrettyInfo prettyInfoFromOutput(
@@ -32,10 +32,11 @@ public record CompilerFlags(
       CliEnums.detectFormat(outputFile),
       AyaPrettierOptions.pretty(),
       renderOptions,
-      null);
+      null, null, null);
     return null;
   }
 
+  /// @param datetimeFrontMatterValue see {@link org.aya.cli.utils.LiterateData.InjectedFrontMatter}
   public record PrettyInfo(
     boolean ascii,
     boolean prettyNoCodeStyle,
@@ -45,6 +46,8 @@ public record CompilerFlags(
     @NotNull CliEnums.PrettyFormat prettyFormat,
     @NotNull PrettierOptions prettierOptions,
     @NotNull RenderOptions renderOptions,
+    @Nullable String datetimeFrontMatterKey,
+    @Nullable String datetimeFrontMatterValue,
     @Nullable String prettyDir
   ) {
     public @NotNull RenderOptions.DefaultSetup backendOpts(boolean headerCode) {
@@ -54,10 +57,10 @@ public record CompilerFlags(
   }
 
   public record Message(
-    @NotNull String successNotion,
-    @NotNull String failNotion
+    @NotNull String successNotation,
+    @NotNull String failNotation
   ) {
-    public static final Message EMOJI = new Message("\uD83D\uDC02\uD83C\uDF7A", "\uD83D\uDD28");
-    public static final Message ASCII = new Message("That looks right!", "What are you doing?");
+    public static final Message EMOJI = new Message("🎉", "🥲");
+    public static final Message ASCII = new Message("That looks right!", "Let's learn from that.");
   }
 }

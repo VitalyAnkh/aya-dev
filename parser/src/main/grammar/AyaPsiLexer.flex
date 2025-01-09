@@ -56,12 +56,13 @@ import static org.aya.parser.AyaPsiElementTypes.*;
 // Identifier, adapted from AyaLexer.g4
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-AYA_SIMPLE_LETTER = [~!@#$%\^&*+=<>?/\[\]a-zA-Z_\u2200-\u22FF]
+AYA_SIMPLE_LETTER = [~!#$%\^&*+=<>?/\[\]a-zA-Z_\u2200-\u22FF]
 AYA_UNICODE = [\u0080-\uFEFE] | [\uFF00-\u{10FFFF}]
 AYA_LETTER = {AYA_SIMPLE_LETTER} | {AYA_UNICODE}
-AYA_LETTER_FOLLOW = {AYA_LETTER} | [0-9'|-]
+AYA_LETTER_FOLLOW = {AYA_LETTER} | [0-9'@|-]
 REPL_COMMAND = : {AYA_LETTER_FOLLOW}+
-ID = {AYA_LETTER} {AYA_LETTER_FOLLOW}* | \- {AYA_LETTER} {AYA_LETTER_FOLLOW}* | \/\\ | \\\/
+ID = {AYA_LETTER} {AYA_LETTER_FOLLOW}* | \- {AYA_LETTER} {AYA_LETTER_FOLLOW}*
+  | \/\\ | \\\/ | \- | \-\-+ {AYA_LETTER_FOLLOW}*
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Literals, adapted from AyaLexer.g4
@@ -90,10 +91,6 @@ LARROW = <- | \u2190
 IMPLIES = => | \u21d2
 LIDIOM = \(\| | \u2987
 RIDIOM = \|\) | \u2988
-LPARTIAL = \{\| | \u2983
-RPARTIAL = \|\} |\u2984
-LPATH = \[\| | \u27E6
-RPATH = \|\] | \u27E7
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Comments, adapted from AyaLexer.g4
@@ -113,41 +110,46 @@ BLOCK_COMMENT_END   = "*/"
   "fixl"                { return KW_FIXL; }
   "fixr"                { return KW_FIXR; }
 
-  "tighter"             { return KW_TIGHTER; }
-  "looser"              { return KW_LOOSER; }
   "example"             { return KW_EXAMPLE; }
-  "counterexample"      { return KW_COUNTEREXAMPLE; }
-  "Type"                { return KW_TYPE; }
-  "Set"                 { return KW_SET; }
-  "ISet"                { return KW_ISET; }
-  "as"                  { return KW_AS; }
+  "partial"             { return KW_PARTIAL; }
+  "coerce"              { return KW_COERCE; }
+  "opaque"              { return KW_OPAQUE; }
+  "inline"              { return KW_INLINE; }
+  "overlap"             { return KW_OVERLAP; }
+  "override"            { return KW_OVERRIDE; }
+  "completed"           { return KW_COMPLETED; }
+
+  "variable"            { return KW_VARIABLE; }
+  "def"                 { return KW_DEF; }
+  "class"               { return KW_CLASS; }
+  "inductive"           { return KW_DATA; }
+  "prim"                { return KW_PRIM; }
+  "coinductive"         { return KW_CODATA; }
+
   "open"                { return KW_OPEN; }
   "import"              { return KW_IMPORT; }
   "public"              { return KW_PUBLIC; }
   "private"             { return KW_PRIVATE; }
   "using"               { return KW_USING; }
   "hiding"              { return KW_HIDING; }
-  "coerce"              { return KW_COERCE; }
-  "opaque"              { return KW_OPAQUE; }
-  "inline"              { return KW_INLINE; }
-  "overlap"             { return KW_OVERLAP; }
   "module"              { return KW_MODULE; }
+
+  "tighter"             { return KW_TIGHTER; }
+  "looser"              { return KW_LOOSER; }
+  "Type"                { return KW_TYPE; }
+  "Set"                 { return KW_SET; }
+  "ISet"                { return KW_ISET; }
+  "as"                  { return KW_AS; }
   "match"               { return KW_MATCH; }
-  "variable"            { return KW_VARIABLE; }
-  "def"                 { return KW_DEF; }
-  "class"               { return KW_CLASS; }
+  "returns"             { return KW_RETURNS; }
   "classifying"         { return KW_CLASSIFIYING; }
-  "data"                { return KW_DATA; }
-  "prim"                { return KW_PRIM; }
   "extends"             { return KW_EXTENDS; }
   "new"                 { return KW_NEW; }
   "do"                  { return KW_DO; }
   "self"                { return KW_SELF; }
-  "override"            { return KW_OVERRIDE; }
-  "codata"              { return KW_CODATA; }
+  "elim"                { return KW_ELIM; }
   "let"                 { return KW_LET; }
   "in"                  { return KW_IN; }
-  "completed"           { return KW_COMPLETED; }
   ":="                  { return DEFINE_AS; }
   "**"                  { return SUCHTHAT; }
   "."                   { return DOT; }
@@ -161,7 +163,8 @@ BLOCK_COMMENT_END   = "*/"
   ")"                   { return RPAREN; }
   "["                   { return LARRAY; }
   "]"                   { return RARRAY; }
-  "{?"                  { return LGOAL; }
+  // Support Spanish because it's cute
+  "{?"|"{¿"             { return LGOAL; }
   "?}"                  { return RGOAL; }
   "@"                   { return AT; }
   "_"                   { return CALM_FACE; }
@@ -176,11 +179,6 @@ BLOCK_COMMENT_END   = "*/"
   {IMPLIES}             { return IMPLIES; }
   {LIDIOM}              { return LIDIOM; }
   {RIDIOM}              { return RIDIOM; }
-  {LPARTIAL}            { return LPARTIAL; }
-  {RPARTIAL}            { return RPARTIAL; }
-  {LPATH}               { return LPATH; }
-  {RPATH}               { return RPATH; }
-
 
   // put REPL_COMMAND before ID, or REPL_COMMAND can never be matched
   {REPL_COMMAND}        { return getTokenStart() == 0 && isRepl ? REPL_COMMAND : ID; }

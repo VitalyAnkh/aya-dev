@@ -1,0 +1,38 @@
+      
+open inductive Unit | unit
+   
+
+                                                                    
+                                        
+
+      
+   
+
+                                            
+                                                      
+
+      
+def foo =>
+
+   
+
+                                                                                 
+
+      
+  unit
+   
+
+                       
+
+                                                       
+
+      
+open inductive Bool | true | false
+
+def > (lhs rhs : Unit) : Bool =>
+   
+
+                                  
+
+      
+  false

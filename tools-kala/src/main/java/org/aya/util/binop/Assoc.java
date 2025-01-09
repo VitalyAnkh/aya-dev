@@ -1,10 +1,7 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.util.binop;
 
-/**
- * @author ice1000
- */
 public enum Assoc {
   /** infix */
   Infix,
@@ -17,7 +14,7 @@ public enum Assoc {
   /** postfix operators */
   FixR,
 
-  Invalid;
+  Unspecified;
 
   public boolean isBinary() {
     return this == Infix || this == InfixL || this == InfixR;

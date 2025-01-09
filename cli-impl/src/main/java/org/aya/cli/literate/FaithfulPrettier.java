@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.literate;
 
@@ -42,11 +42,14 @@ public interface FaithfulPrettier {
     return highlightInRange;
   }
 
-  default @NotNull Doc doHighlight(@NotNull StringSlice raw, int base, @NotNull ImmutableSeq<HighlightInfo> highlights) {
+  default @NotNull Doc doHighlight(
+    @NotNull StringSlice raw, int base,
+    @NotNull ImmutableSeq<? extends HighlightInfo> highlights
+  ) {
     var docs = MutableList.<Doc>create();
 
     for (var current : highlights) {
-      // Cut the `raw` text at `base` offset into three parts: before, current, and remaining,
+      // Cut the `raw` text (which starts at `base` in the origin string) into three parts: before, current, and remaining,
       // which needs two split positions: `current.sourcePos().start` and `current.sourcePos().end`, respectively.
       var knifeCut = twoKnifeThreeParts(raw, base, current.sourcePos());
 
@@ -74,9 +77,9 @@ public interface FaithfulPrettier {
       case HighlightInfo.Def def -> Doc.linkDef(highlightVar(raw, def.kind()), def.target(), hover(def.type()));
       case HighlightInfo.Ref ref -> Doc.linkRef(highlightVar(raw, ref.kind()), ref.target(), hover(ref.type()));
       case HighlightInfo.Lit lit -> highlightLit(raw, lit.kind());
-      case HighlightInfo.Err err -> {
-        var doc = doHighlight(StringSlice.of(raw), base, err.children());
-        var style = switch (err.problem().level()) {
+      case HighlightInfo.Err(var problem, var children) -> {
+        var doc = doHighlight(StringSlice.of(raw), base, children);
+        var style = switch (problem.level()) {
           case ERROR -> BasePrettier.ERROR;
           case WARN -> BasePrettier.WARNING;
           case GOAL -> BasePrettier.GOAL;
@@ -84,9 +87,11 @@ public interface FaithfulPrettier {
         };
         yield style == null ? doc : new Doc.Tooltip(Doc.styled(style, doc), () -> Doc.codeBlock(
           Language.Builtin.Aya,
-          err.problem().brief(options()).toDoc()
+          problem.brief(options()).toDoc()
         ));
       }
+      case HighlightInfo.UserMeta meta -> new Doc.Tooltip(Doc.plain(raw),
+        () -> Doc.codeBlock(Language.Builtin.Aya, meta.hover().toDoc(options())));
     };
   }
 

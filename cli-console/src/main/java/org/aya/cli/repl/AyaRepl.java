@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.repl;
 
@@ -12,11 +12,12 @@ import org.aya.cli.render.RenderOptions;
 import org.aya.cli.repl.jline.AyaCompleters;
 import org.aya.cli.repl.jline.JlineRepl;
 import org.aya.generic.AyaDocile;
-import org.aya.generic.util.NormalizeMode;
 import org.aya.prelude.GeneratedVersion;
 import org.aya.prettier.AyaPrettierOptions;
 import org.aya.pretty.doc.Doc;
 import org.aya.repl.*;
+import org.aya.syntax.core.def.TopLevelDef;
+import org.aya.syntax.literate.CodeOptions;
 import org.aya.util.reporter.Problem;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -25,17 +26,26 @@ import org.jline.builtins.Completers;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public abstract class AyaRepl implements Closeable, Runnable, Repl {
-  public static int start(@NotNull ImmutableSeq<Path> modulePaths, MainArgs.@NotNull ReplAction replAction) throws IOException {
-    try (var repl = makeRepl(modulePaths, replAction, ReplConfig.loadFromDefault())) {
+  public static int start(
+    @NotNull ImmutableSeq<Path> modulePaths,
+    boolean loadPrelude,
+    @Nullable String initFile,
+    MainArgs.@NotNull ReplAction replAction
+  ) throws IOException {
+    var replConfig = ReplConfig.loadFromDefault();
+    replConfig.loadPrelude = loadPrelude;
+    try (var repl = makeRepl(modulePaths, replAction, replConfig)) {
+      if (initFile != null) repl.replCompiler.loadToContext(Paths.get(initFile));
       repl.run();
     }
     return 0;
   }
 
-  @NotNull
-  private static AyaRepl makeRepl(@NotNull ImmutableSeq<Path> modulePaths, MainArgs.@NotNull ReplAction replAction, ReplConfig replConfig) throws IOException {
+  private static @NotNull AyaRepl
+  makeRepl(@NotNull ImmutableSeq<Path> modulePaths, MainArgs.@NotNull ReplAction replAction, ReplConfig replConfig) throws IOException {
     return switch (replAction.replType) {
       case jline -> new JlineRepl(modulePaths, replConfig);
       case plain -> new PlainRepl(modulePaths, replConfig, IO.STDIO);
@@ -53,7 +63,7 @@ public abstract class AyaRepl implements Closeable, Runnable, Repl {
       CommandArg.from(ReplUtil.HelpItem.class, new ReplCompleters.Help(() -> commandManager), ReplUtil.HelpItem::new),
       CommandArg.from(ReplCommands.Prompt.class, null, ReplCommands.Prompt::new),
       CommandArg.fromEnum(AyaPrettierOptions.Key.class),
-      CommandArg.fromEnum(NormalizeMode.class),
+      CommandArg.fromEnum(CodeOptions.NormalizeMode.class),
       CommandArg.fromEither(ReplCommands.ColorParam.class,
         CommandArg.fromEnum(RenderOptions.ColorSchemeName.class),
         pathArg,
@@ -71,12 +81,16 @@ public abstract class AyaRepl implements Closeable, Runnable, Repl {
       ReplCommands.CHANGE_NORM_MODE,
       ReplCommands.TOGGLE_PRETTY,
       ReplCommands.SHOW_TYPE,
-      ReplCommands.CODIFY,
+      ReplCommands.SHOW_INFO,
       ReplCommands.SHOW_PARSE_TREE,
       ReplCommands.CHANGE_PP_WIDTH,
       ReplCommands.TOGGLE_UNICODE,
       ReplCommands.CHANGE_CWD,
-      ReplCommands.PRINT_CWD,
+      ReplCommands.UNIMPORT,
+      ReplCommands.SHOW_CWD,
+      ReplCommands.SHOW_PROPERTY,
+      ReplCommands.SHOW_MODULE_PATHS,
+      ReplCommands.SHOW_SHAPES,
       ReplCommands.LOAD,
       ReplCommands.COLOR,
       ReplCommands.STYLE
@@ -94,6 +108,7 @@ public abstract class AyaRepl implements Closeable, Runnable, Repl {
     replCompiler = new ReplCompiler(modulePaths, new AnsiReporter(true,
       () -> config.enableUnicode, () -> config.literatePrettier.prettierOptions,
       Problem.Severity.INFO, this::println, this::errPrintln), null);
+    if (config.loadPrelude) replCompiler.loadPreludeIfPossible();
   }
 
   protected abstract @Nullable String hintMessage();
@@ -103,8 +118,9 @@ public abstract class AyaRepl implements Closeable, Runnable, Repl {
   }
 
   @Override public void run() {
-    if (!config.silent) {
-      println("Aya " + GeneratedVersion.VERSION_STRING + " (" + GeneratedVersion.COMMIT_HASH + ")");
+    if (!config.quiet) {
+      println("Aya " + GeneratedVersion.VERSION_STRING + " (" + GeneratedVersion.COMMIT_HASH
+        + ", jdk " + GeneratedVersion.JDK_VERSION + ")");
       var hint = hintMessage();
       if (hint != null) println(hint);
     }
@@ -126,14 +142,20 @@ public abstract class AyaRepl implements Closeable, Runnable, Repl {
   @Override public @NotNull Command.Output eval(@NotNull String line) {
     var programOrTerm = replCompiler.compileToContext(line, config.normalizeMode);
     return Command.Output.stdout(programOrTerm.fold(
-      program -> config.silent ? Doc.empty() :
-        Doc.vcat(program.view().map(def -> def.toDoc(config.literatePrettier.prettierOptions))),
+      program -> config.quiet ? Doc.empty() :
+        Doc.vcat(program.view()
+          .filterIsInstance(TopLevelDef.class)
+          .map(this::render)),
       this::render
     ));
   }
 
   public @NotNull Doc render(@NotNull AyaDocile ayaDocile) {
-    return ayaDocile.toDoc(config.literatePrettier.prettierOptions);
+    return ayaDocile.toDoc(prettierOptions());
+  }
+
+  public @NotNull AyaPrettierOptions prettierOptions() {
+    return config.literatePrettier.prettierOptions;
   }
 
   @Override public @NotNull String renderDoc(@NotNull Doc doc) {

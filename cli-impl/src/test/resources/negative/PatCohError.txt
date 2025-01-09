@@ -1,0 +1,743 @@
+UnsureMissing:
+In file $FILE:10:0 ->
+
+  8  │   | suc n, fsuc a => suc (finToNat n a)
+  9  │   
+  10 │   def addF {m n : Nat} (a : Fin+1 m) (b : Fin+1 n) : Fin+1 (finToNat m a + n)
+     │ ╭─╯
+  11 │ │ | fzero, a' => a'
+     │ ╰─────────────────╯
+
+Error: I'm unsure if there should be a case for constructor
+         | suc m ⇒ fsuc (_ : Fin+1 ^0)
+       because I got stuck on the index unification of type
+         Fin+1 m
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+Confl:
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def addN Nat Nat : Nat
+    │                   ╰──╯
+  3 │       | zero, a => suc a
+    │         ╰──────────────╯ confluence: this clause is substituted to `zero`
+  4 │       | a, zero => a
+    │         ╰──────────╯ confluence: this clause is substituted to `suc zero`
+  5 │       | suc a, b => suc (addN a b)
+
+Error: The 2nd and the 1st clauses are not confluent because we failed to unify
+         zero
+       and
+         suc zero
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+ConflLiteral:
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def test Nat : Nat
+    │                   ╰──╯
+  3 │       | 0 => 0
+  4 │       | a => a
+    │         ╰────╯ confluence: this clause is substituted to `1919`
+  5 │       | suc a => suc a
+  6 │       | suc (suc a) => a
+  7 │       | 2147483647 => 3
+  8 │       | 2147483647 => 4
+  9 │       | 114514 => 1919
+    │         ╰────────────╯ confluence: this clause is substituted to `114514`
+
+Error: The 2nd and the 7th clauses are not confluent because we failed to unify
+         114514
+       and
+         1919
+
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def test Nat : Nat
+    │                   ╰──╯
+  3 │       | 0 => 0
+  4 │       | a => a
+  5 │       | suc a => suc a
+    │         ╰────────────╯ confluence: this clause is substituted to `a`
+  6 │       | suc (suc a) => a
+    │         ╰──────────────╯ confluence: this clause is substituted to `suc (suc
+                               a)`
+  7 │       | 2147483647 => 3
+
+Error: The 4th and the 3rd clauses are not confluent because we failed to unify
+         a
+       and
+         suc (suc a)
+
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def test Nat : Nat
+    │                   ╰──╯
+  3 │       | 0 => 0
+  4 │       | a => a
+  5 │       | suc a => suc a
+  6 │       | suc (suc a) => a
+  7 │       | 2147483647 => 3
+    │         ╰─────────────╯ confluence: this clause is substituted to `4`
+  8 │       | 2147483647 => 4
+    │         ╰─────────────╯ confluence: this clause is substituted to `3`
+  9 │       | 114514 => 1919
+
+Error: The 6th and the 5th clauses are not confluent because we failed to unify
+         4
+       and
+         3
+
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def test Nat : Nat
+    │                   ╰──╯
+  3 │       | 0 => 0
+  4 │       | a => a
+    │         ╰────╯ confluence: this clause is substituted to `4`
+  5 │       | suc a => suc a
+  6 │       | suc (suc a) => a
+  7 │       | 2147483647 => 3
+  8 │       | 2147483647 => 4
+    │         ╰─────────────╯ confluence: this clause is substituted to `2147483647`
+  9 │       | 114514 => 1919
+
+Error: The 2nd and the 6th clauses are not confluent because we failed to unify
+         2147483647
+       and
+         4
+
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def test Nat : Nat
+    │                   ╰──╯
+  3 │       | 0 => 0
+  4 │       | a => a
+  5 │       | suc a => suc a
+    │         ╰────────────╯ confluence: this clause is substituted to `a`
+  6 │       | suc (suc a) => a
+    │         ╰──────────────╯ confluence: this clause is substituted to `suc (suc
+                               a)`
+  7 │       | 2147483647 => 3
+
+Error: The 4th and the 3rd clauses are not confluent because we failed to unify
+         a
+       and
+         suc (suc a)
+
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def test Nat : Nat
+    │                   ╰──╯
+  3 │       | 0 => 0
+  4 │       | a => a
+  5 │       | suc a => suc a
+    │         ╰────────────╯ confluence: this clause is substituted to `a`
+  6 │       | suc (suc a) => a
+    │         ╰──────────────╯ confluence: this clause is substituted to `suc (suc
+                               a)`
+  7 │       | 2147483647 => 3
+
+Error: The 4th and the 3rd clauses are not confluent because we failed to unify
+         a
+       and
+         suc (suc a)
+
+In file $FILE:3:2 ->
+
+  1 │   open import arith::nat::base
+  2 │   overlap def test Nat : Nat
+  3 │   | 0 => 0
+    │     ╰────╯
+
+Warning: The 2nd clause dominates the 1st clause. The 1st clause will be 
+         unreachable
+
+In file $FILE:5:2 ->
+
+  3 │   | 0 => 0
+  4 │   | a => a
+  5 │   | suc a => suc a
+    │     ╰────────────╯
+
+Warning: The 2nd clause dominates the 3rd clause. The 3rd clause will be 
+         unreachable
+
+In file $FILE:9:2 ->
+
+  7 │   | 2147483647 => 3
+  8 │   | 2147483647 => 4
+  9 │   | 114514 => 1919
+    │     ╰────────────╯
+
+Warning: The 2nd clause dominates the 7th clause. The 7th clause will be 
+         unreachable
+
+In file $FILE:6:2 ->
+
+  4 │   | a => a
+  5 │   | suc a => suc a
+  6 │   | suc (suc a) => a
+    │     ╰──────────────╯
+
+Warning: The 3rd clause dominates the 4th clause. The 4th clause will be 
+         unreachable
+
+In file $FILE:8:2 ->
+
+  6 │   | suc (suc a) => a
+  7 │   | 2147483647 => 3
+  8 │   | 2147483647 => 4
+    │     ╰─────────────╯
+
+Warning: The 5th clause dominates the 6th clause. The 6th clause will be 
+         unreachable
+
+In file $FILE:7:2 ->
+
+  5 │   | suc a => suc a
+  6 │   | suc (suc a) => a
+  7 │   | 2147483647 => 3
+    │     ╰─────────────╯
+
+Warning: The 6th clause dominates the 5th clause. The 5th clause will be 
+         unreachable
+
+In file $FILE:8:2 ->
+
+  6 │   | suc (suc a) => a
+  7 │   | 2147483647 => 3
+  8 │   | 2147483647 => 4
+    │     ╰─────────────╯
+
+Warning: The 2nd clause dominates the 6th clause. The 6th clause will be 
+         unreachable
+
+6 error(s), 7 warning(s).
+Let's learn from that.
+
+ConflLiteral2:
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def largeInt1 Nat Nat : Nat
+    │                   ╰───────╯
+  3 │       | a, b => a
+    │         ╰───────╯ confluence: this clause is substituted to `1`
+  4 │       | 114514, 1919810 => 1
+    │         ╰──────────────────╯ confluence: this clause is substituted to `114514`
+  5 │       
+
+Error: The 1st and the 2nd clauses are not confluent because we failed to unify
+         114514
+       and
+         1
+
+In file $FILE:4:2 ->
+
+  2 │   overlap def largeInt1 Nat Nat : Nat
+  3 │   | a, b => a
+  4 │   | 114514, 1919810 => 1
+    │     ╰──────────────────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:6:12 ->
+
+  4 │       | 114514, 1919810 => 1
+  5 │       
+  6 │       overlap def largeInt2 Nat Nat : Nat
+    │                   ╰───────╯
+  7 │       | a, b => b
+    │         ╰───────╯ confluence: this clause is substituted to `1`
+  8 │       | a, 1919810 => 1
+    │         ╰─────────────╯ confluence: this clause is substituted to `1919810`
+
+Error: The 1st and the 2nd clauses are not confluent because we failed to unify
+         1919810
+       and
+         1
+
+In file $FILE:8:2 ->
+
+  6 │   overlap def largeInt2 Nat Nat : Nat
+  7 │   | a, b => b
+  8 │   | a, 1919810 => 1
+    │     ╰─────────────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:10:12 ->
+
+  8  │       | a, 1919810 => 1
+  9  │       
+  10 │       overlap def largeInt3 Nat Nat : Nat
+     │                   ╰───────╯
+  11 │       | a, b => b
+     │         ╰───────╯ confluence: this clause is substituted to `1`
+  12 │       | a, suc b => b
+  13 │       | a, 1919810 => 1
+     │         ╰─────────────╯ confluence: this clause is substituted to `1919810`
+
+Error: The 1st and the 3rd clauses are not confluent because we failed to unify
+         1919810
+       and
+         1
+
+In file $FILE:10:12 ->
+
+  8  │       | a, 1919810 => 1
+  9  │       
+  10 │       overlap def largeInt3 Nat Nat : Nat
+     │                   ╰───────╯
+  11 │       | a, b => b
+     │         ╰───────╯ confluence: this clause is substituted to `b`
+  12 │       | a, suc b => b
+     │         ╰───────────╯ confluence: this clause is substituted to `suc b`
+
+Error: The 2nd and the 1st clauses are not confluent because we failed to unify
+         b
+       and
+         suc b
+
+In file $FILE:10:12 ->
+
+  8  │       | a, 1919810 => 1
+  9  │       
+  10 │       overlap def largeInt3 Nat Nat : Nat
+     │                   ╰───────╯
+  11 │       | a, b => b
+     │         ╰───────╯ confluence: this clause is substituted to `b`
+  12 │       | a, suc b => b
+     │         ╰───────────╯ confluence: this clause is substituted to `suc b`
+
+Error: The 2nd and the 1st clauses are not confluent because we failed to unify
+         b
+       and
+         suc b
+
+In file $FILE:13:2 ->
+
+  11 │   | a, b => b
+  12 │   | a, suc b => b
+  13 │   | a, 1919810 => 1
+     │     ╰─────────────╯
+
+Warning: The 1st clause dominates the 3rd clause. The 3rd clause will be 
+         unreachable
+
+In file $FILE:12:2 ->
+
+  10 │   overlap def largeInt3 Nat Nat : Nat
+  11 │   | a, b => b
+  12 │   | a, suc b => b
+     │     ╰───────────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:15:12 ->
+
+  13 │       | a, 1919810 => 1
+  14 │       
+  15 │       overlap def largeInt1-inv Nat Nat : Nat
+     │                   ╰───────────╯
+  16 │       | a, b => a
+     │         ╰───────╯ confluence: this clause is substituted to `1`
+  17 │       | 114514, 1919810 => 1
+     │         ╰──────────────────╯ confluence: this clause is substituted to `114514`
+
+Error: The 1st and the 2nd clauses are not confluent because we failed to unify
+         114514
+       and
+         1
+
+In file $FILE:17:2 ->
+
+  15 │   overlap def largeInt1-inv Nat Nat : Nat
+  16 │   | a, b => a
+  17 │   | 114514, 1919810 => 1
+     │     ╰──────────────────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:19:12 ->
+
+  17 │       | 114514, 1919810 => 1
+  18 │       
+  19 │       overlap def largeInt2-inv Nat Nat : Nat
+     │                   ╰───────────╯
+  20 │       | b, a => b
+     │         ╰───────╯ confluence: this clause is substituted to `1`
+  21 │       | 1919810, a => 1
+     │         ╰─────────────╯ confluence: this clause is substituted to `1919810`
+
+Error: The 1st and the 2nd clauses are not confluent because we failed to unify
+         1919810
+       and
+         1
+
+In file $FILE:21:2 ->
+
+  19 │   overlap def largeInt2-inv Nat Nat : Nat
+  20 │   | b, a => b
+  21 │   | 1919810, a => 1
+     │     ╰─────────────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:23:12 ->
+
+  21 │       | 1919810, a => 1
+  22 │       
+  23 │       overlap def largeInt3-inv Nat Nat : Nat
+     │                   ╰───────────╯
+  24 │       | b, a => b
+     │         ╰───────╯ confluence: this clause is substituted to `1`
+  25 │       | suc b, a => b
+  26 │       | 1919810, a => 1
+     │         ╰─────────────╯ confluence: this clause is substituted to `1919810`
+
+Error: The 1st and the 3rd clauses are not confluent because we failed to unify
+         1919810
+       and
+         1
+
+In file $FILE:23:12 ->
+
+  21 │       | 1919810, a => 1
+  22 │       
+  23 │       overlap def largeInt3-inv Nat Nat : Nat
+     │                   ╰───────────╯
+  24 │       | b, a => b
+     │         ╰───────╯ confluence: this clause is substituted to `b`
+  25 │       | suc b, a => b
+     │         ╰───────────╯ confluence: this clause is substituted to `suc b`
+
+Error: The 2nd and the 1st clauses are not confluent because we failed to unify
+         b
+       and
+         suc b
+
+In file $FILE:23:12 ->
+
+  21 │       | 1919810, a => 1
+  22 │       
+  23 │       overlap def largeInt3-inv Nat Nat : Nat
+     │                   ╰───────────╯
+  24 │       | b, a => b
+     │         ╰───────╯ confluence: this clause is substituted to `b`
+  25 │       | suc b, a => b
+     │         ╰───────────╯ confluence: this clause is substituted to `suc b`
+
+Error: The 2nd and the 1st clauses are not confluent because we failed to unify
+         b
+       and
+         suc b
+
+In file $FILE:26:2 ->
+
+  24 │   | b, a => b
+  25 │   | suc b, a => b
+  26 │   | 1919810, a => 1
+     │     ╰─────────────╯
+
+Warning: The 1st clause dominates the 3rd clause. The 3rd clause will be 
+         unreachable
+
+In file $FILE:25:2 ->
+
+  23 │   overlap def largeInt3-inv Nat Nat : Nat
+  24 │   | b, a => b
+  25 │   | suc b, a => b
+     │     ╰───────────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:28:12 ->
+
+  26 │       | 1919810, a => 1
+  27 │       
+  28 │       overlap def multi-nodes Nat Nat : Nat
+     │                   ╰─────────╯
+  29 │       | 114, 0 => 0
+  30 │       | 114, suc b => suc b
+     │         ╰─────────────────╯ confluence: this clause is substituted to `515`
+  31 │       | 114, 514 => 515
+     │         ╰─────────────╯ confluence: this clause is substituted to `suc 513`
+
+Error: The 2nd and the 3rd clauses are not confluent because we failed to unify
+         suc 513
+         (Normalized: 514)
+       and
+         515
+
+In file $FILE:29:2 ->
+
+  27 │   
+  28 │   overlap def multi-nodes Nat Nat : Nat
+  29 │   | 114, 0 => 0
+     │     ╰─────────╯
+
+Warning: The 5th clause dominates the 1st clause. The 1st clause will be 
+         unreachable
+
+In file $FILE:31:2 ->
+
+  29 │   | 114, 0 => 0
+  30 │   | 114, suc b => suc b
+  31 │   | 114, 514 => 515
+     │     ╰─────────────╯
+
+Warning: The 2nd clause dominates the 3rd clause. The 3rd clause will be 
+         unreachable
+
+In file $FILE:30:2 ->
+
+  28 │   overlap def multi-nodes Nat Nat : Nat
+  29 │   | 114, 0 => 0
+  30 │   | 114, suc b => suc b
+     │     ╰─────────────────╯
+
+Warning: The 5th clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:32:2 ->
+
+  30 │   | 114, suc b => suc b
+  31 │   | 114, 514 => 515
+  32 │   | 115, 514 => 514
+     │     ╰─────────────╯
+
+Warning: The 5th clause dominates the 4th clause. The 4th clause will be 
+         unreachable
+
+11 error(s), 12 warning(s).
+Let's learn from that.
+
+FirstMatchDomination:
+In file $FILE:6:2 ->
+
+  4 │   | a, zero => a
+  5 │   | suc a, b => suc (addN a b)
+  6 │   | a, suc b => suc (addN a b)
+    │     ╰────────────────────────╯
+
+Warning: The 4th clause is dominated by the other clauses, hence unreachable
+
+That looks right!
+
+LiteralConfluence:
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def not-conf Nat : Nat
+    │                   ╰──────╯
+  3 │       | zero => 1
+    │         ╰───────╯ confluence: this clause is substituted to `0`
+  4 │       | 0 => 0
+    │         ╰────╯ confluence: this clause is substituted to `1`
+  5 │       | 1 => 1
+
+Error: The 2nd and the 1st clauses are not confluent because we failed to unify
+         0
+       and
+         1
+
+In file $FILE:2:12 ->
+
+  1 │       open import arith::nat::base
+  2 │       overlap def not-conf Nat : Nat
+    │                   ╰──────╯
+  3 │       | zero => 1
+  4 │       | 0 => 0
+  5 │       | 1 => 1
+    │         ╰────╯ confluence: this clause is substituted to `0`
+  6 │       | suc 1 => 1
+  7 │       | suc n => n
+    │         ╰────────╯ confluence: this clause is substituted to `1`
+
+Error: The 5th and the 3rd clauses are not confluent because we failed to unify
+         0
+       and
+         1
+
+In file $FILE:4:2 ->
+
+  2 │   overlap def not-conf Nat : Nat
+  3 │   | zero => 1
+  4 │   | 0 => 0
+    │     ╰────╯
+
+Warning: The 1st clause dominates the 2nd clause. The 2nd clause will be 
+         unreachable
+
+In file $FILE:3:2 ->
+
+  1 │   open import arith::nat::base
+  2 │   overlap def not-conf Nat : Nat
+  3 │   | zero => 1
+    │     ╰───────╯
+
+Warning: The 2nd clause dominates the 1st clause. The 1st clause will be 
+         unreachable
+
+In file $FILE:5:2 ->
+
+  3 │   | zero => 1
+  4 │   | 0 => 0
+  5 │   | 1 => 1
+    │     ╰────╯
+
+Warning: The 5th clause dominates the 3rd clause. The 3rd clause will be 
+         unreachable
+
+In file $FILE:6:2 ->
+
+  4 │   | 0 => 0
+  5 │   | 1 => 1
+  6 │   | suc 1 => 1
+    │     ╰────────╯
+
+Warning: The 5th clause dominates the 4th clause. The 4th clause will be 
+         unreachable
+
+2 error(s), 4 warning(s).
+Let's learn from that.
+
+NestedMissing:
+In file $FILE:2:0 ->
+
+  1 │   open import arith::nat::base
+  2 │   def add {m n : Nat} : Nat
+    │ ╭─╯
+  3 │ │  | {0}, {0} => 0
+    │ │  
+  4 │ │  | {0}, {suc (suc a)} => 0
+    │ │  
+  5 │ │  | {suc a}, {0} => 0
+    │ │  
+  6 │ │  | {suc a}, {b} => 0
+    │ │  
+  7 │ │ | {suc a}, {suc b} => 0
+    │ ╰───────────────────────╯
+
+Error: Unhandled case:
+         zero, suc zero
+
+In file $FILE:7:2 ->
+
+  5 │   | {suc a}, {0} => 0
+  6 │   | {suc a}, {b} => 0
+  7 │   | {suc a}, {suc b} => 0
+    │     ╰───────────────────╯
+
+Warning: The 5th clause is dominated by the other clauses, hence unreachable
+
+1 error(s), 1 warning(s).
+Let's learn from that.
+
+IApplyConfluence:
+In file $FILE:4:4 ->
+
+  2 │     open import arith::int::base
+  3 │     open import arith::bool::base
+  4 │     def test Int : Nat
+    │         ╰──╯
+  5 │     | signed true _ => 1
+  6 │     | signed false _ => 0
+  7 │     | posneg _ => 1
+    │       ╰───────────╯ confluence: this clause is substituted to `1`
+
+Error: The 3rd clause matches on a path constructor. We failed to unify
+         1
+       with
+         0
+       for the arguments:
+         posneg 0
+       Normalized:
+         signed false 0
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+Coverage:
+In file $FILE:2:0 ->
+
+  1 │   open import arith::nat::base
+  2 │   def cov (x x' x'' x''' : Nat) : Nat
+    │ ╭─╯
+  3 │ │  | zero, a, b, c => 0
+    │ │  
+  4 │ │  | a, zero, b, c => 0
+    │ │  
+  5 │ │ | a, b, zero, c => 0
+    │ ╰────────────────────╯
+
+Error: Unhandled case:
+         suc _, suc _, suc _, x'''
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+CoverageLiteral:
+In file $FILE:2:0 ->
+
+  1 │   open import arith::nat::base
+  2 │   def cov (x x' x'' x''' : Nat) : Nat
+    │ ╭─╯
+  3 │ │  | 0, a, b, c => 0
+    │ │  
+  4 │ │  | a, 0, b, c => 0
+    │ │  
+  5 │ │ | a, b, 0, c => 0
+    │ ╰─────────────────╯
+
+Error: Unhandled case:
+         1, 1, 1, x'''
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+IApplyConflReduce:
+In file $FILE:8:4 ->
+
+  6  │     | posneg (n : Nat) : pos n = neg n
+  7  │     
+  8  │     def abs WrongInt : Nat
+     │         ╰─╯
+  9  │     | pos (suc n) => 1
+  10 │     | pos zero => 1
+  11 │     | neg n => 0
+  12 │     | posneg n i => 0
+     │       ╰─────────────╯ confluence: this clause is substituted to `0`
+
+Error: The 4th clause matches on a path constructor. We failed to unify
+         0
+       with
+         abs (posneg n 0)
+         (Normalized: abs (pos n))
+       for the arguments:
+         posneg n 0
+       Normalized:
+         pos n
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
