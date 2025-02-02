@@ -1,35 +1,39 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2025 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.repl;
-
-import kala.collection.immutable.ImmutableSeq;
-import kala.control.Either;
-import org.aya.cli.parse.AyaParserImpl;
-import org.aya.cli.render.RenderOptions;
-import org.aya.generic.util.NormalizeMode;
-import org.aya.prettier.AyaPrettierOptions;
-import org.aya.prettier.Codifier;
-import org.aya.pretty.doc.Doc;
-import org.aya.repl.Command;
-import org.aya.repl.CommandArg;
-import org.aya.repl.ReplUtil;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public interface ReplCommands {
-  record Code(@NotNull String code) {}
+import kala.collection.immutable.ImmutableSeq;
+import kala.collection.mutable.MutableList;
+import kala.control.Either;
+import org.aya.cli.render.RenderOptions;
+import org.aya.prettier.AyaPrettierOptions;
+import org.aya.prettier.BasePrettier;
+import org.aya.pretty.doc.Doc;
+import org.aya.producer.AyaParserImpl;
+import org.aya.repl.Command;
+import org.aya.repl.CommandArg;
+import org.aya.repl.ReplUtil;
+import org.aya.syntax.compile.JitDef;
+import org.aya.syntax.core.def.*;
+import org.aya.syntax.literate.CodeOptions;
+import org.aya.syntax.ref.AnyDefVar;
+import org.aya.syntax.ref.DefVar;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-  record Prompt(@NotNull String prompt) {}
+public interface ReplCommands {
+  record Code(@NotNull String code) { }
+  record Prompt(@NotNull String prompt) { }
 
   record ColorParam(@NotNull Either<RenderOptions.ColorSchemeName, Path> value)
-    implements CommandArg.ArgEither<RenderOptions.ColorSchemeName, Path> {}
+    implements CommandArg.ArgEither<RenderOptions.ColorSchemeName, Path> { }
 
   record StyleParam(@NotNull Either<RenderOptions.StyleFamilyName, Path> value)
-    implements CommandArg.ArgEither<RenderOptions.StyleFamilyName, Path> {}
+    implements CommandArg.ArgEither<RenderOptions.StyleFamilyName, Path> { }
 
   @NotNull Command CHANGE_PROMPT = new Command(ImmutableSeq.of("prompt"), "Change the REPL prompt text") {
     @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @NotNull Prompt argument) {
@@ -48,12 +52,38 @@ public interface ReplCommands {
     }
   };
 
-  @NotNull Command CODIFY = new Command(ImmutableSeq.of("codify"), "Generate Java code that builds certain function's body") {
+  @NotNull Command SHOW_MCT = new Command(ImmutableSeq.of("case-tree"), "Show the case tree of a pattern-matching function") {
     @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @NotNull Code code) {
-      var fn = repl.replCompiler.codificationObject(code.code());
-      return fn != null ? new Result(Output.stdout(Doc.plain(
-        Codifier.sweet(fn).toString())), true)
-        : Result.err("Expect just a simple function's (no clauses) name!", true);
+      var resolved = repl.replCompiler.parseToAnyVar(code.code);
+      if (!(resolved instanceof AnyDefVar anyDefVar)) return Result.err("Not a valid reference", true);
+      if (!(anyDefVar instanceof DefVar<?, ?> defVar)) return Result.err("JIT-compiled defs are unsupported", true);
+      if (!(defVar.core instanceof FnDef fn)) return Result.err("Not a function", true);
+      if (!(fn.body() instanceof Either.Right(var body))) return Result.err("Not a pattern-matching function", true);
+      var classes = body.classes.map(cl ->
+        Doc.sep(Doc.commaList(cl.term().view().map(t -> t.toDoc(repl.prettierOptions()))),
+          Doc.symbol("=>"),
+          Doc.commaList(cl.cls().mapToObj(Doc::ordinal))));
+      return new Result(Output.stdout(Doc.vcat(classes)), true);
+    }
+  };
+
+  @NotNull Command SHOW_INFO = new Command(ImmutableSeq.of("info"), "Show the information of the given definition") {
+    @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @NotNull Code code) {
+      var resolved = repl.replCompiler.parseToAnyVar(code.code);
+      if (!(resolved instanceof AnyDefVar defVar)) return Result.err("Not a valid reference", true);
+      var def = AnyDef.fromVar(defVar);
+      AnyDef topLevel = def;
+      switch (def) {
+        case ConDefLike conDefLike -> topLevel = conDefLike.dataRef();
+        case MemberDefLike memberDefLike -> topLevel = memberDefLike.classRef();
+        default -> {
+        }
+      }
+
+      return new Result(Output.stdout((switch (topLevel) {
+        case JitDef jitDef -> repl.render(jitDef);
+        case TyckAnyDef<?> tyckDef -> repl.render(tyckDef.core());
+      })), true);
     }
   };
 
@@ -61,6 +91,17 @@ public interface ReplCommands {
     @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @NotNull Code code) {
       var parseTree = new AyaParserImpl(repl.replCompiler.reporter).parseNode(code.code());
       return Result.ok(parseTree.toDebugString(), true);
+    }
+  };
+
+  @NotNull Command SHOW_SHAPES = new Command(ImmutableSeq.of("debug-show-shapes"), "Show recognized shapes") {
+    @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl) {
+      var discovered = repl.replCompiler.getShapeFactory().discovered;
+      return new Result(Output.stdout(Doc.vcat(discovered.mapTo(MutableList.create(),
+        (def, recog) ->
+          Doc.sep(BasePrettier.refVar(def),
+            Doc.symbol("=>"),
+            Doc.plain(recog.shape().name()))))), true);
     }
   };
 
@@ -72,7 +113,17 @@ public interface ReplCommands {
         return Result.err("Unable to load file or library: " + e.getLocalizedMessage(), true);
       }
       // SingleFileCompiler would print result to REPL.
-      return new Result(Output.empty(), true);
+      return new Result(Output.EMPTY, true);
+    }
+  };
+
+  @NotNull Command UNIMPORT = new Command(ImmutableSeq.of("unimport"), "Remove an imported module from the context") {
+    @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @NotNull Code code) {
+      var index = repl.replCompiler.imports.indexWhere(ii ->
+        ii.modulePath().toString().equals(code.code));
+      if (index < 0) return Result.err("Cannot find module after name `" + code.code + "`", true);
+      repl.replCompiler.imports.removeAt(index);
+      return Result.ok("Removed module `" + code.code + "`", true);
     }
   };
 
@@ -82,13 +133,25 @@ public interface ReplCommands {
       repl.cwd = path;
       // for jline completer to work properly, but it does not have any effect actually
       System.setProperty("user.dir", path.toAbsolutePath().toString());
-      return new Result(Output.empty(), true);
+      return new Result(Output.EMPTY, true);
     }
   };
 
-  @NotNull Command PRINT_CWD = new Command(ImmutableSeq.of("pwd"), "Print current working directory") {
+  @NotNull Command SHOW_CWD = new Command(ImmutableSeq.of("pwd"), "Show current working directory") {
     @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl) {
       return new Result(Output.stdout(repl.cwd.toAbsolutePath().toString()), true);
+    }
+  };
+  @NotNull Command SHOW_PROPERTY = new Command(ImmutableSeq.of("system-property"), "Show a system property") {
+    @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @NotNull String key) {
+      var property = key.isBlank() ? null : System.getProperty(key);
+      var stdout = property != null ? Output.stdout(property) : Output.stderr("No such property");
+      return new Result(stdout, true);
+    }
+  };
+  @NotNull Command SHOW_MODULE_PATHS = new Command(ImmutableSeq.of("module-path"), "Show module path(s)") {
+    @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl) {
+      return new Result(Output.stdout(repl.replCompiler.modulePaths.joinToString()), true);
     }
   };
 
@@ -102,13 +165,14 @@ public interface ReplCommands {
 
   @NotNull Command QUIT = new Command(ImmutableSeq.of("quit", "exit"), "Quit the REPL") {
     @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl) {
-      return Result.ok(repl.config.silent ? "" :
+      return Result.ok(repl.config.quiet ? "" :
         "See you space cow woof woof :3", false);
     }
   };
 
   @NotNull Command CHANGE_NORM_MODE = new Command(ImmutableSeq.of("normalize"), "Set or display the normalization mode") {
-    @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @Nullable NormalizeMode normalizeMode) {
+    @Entry
+    public @NotNull Command.Result execute(@NotNull AyaRepl repl, @Nullable CodeOptions.NormalizeMode normalizeMode) {
       if (normalizeMode == null) return Result.ok("Normalization mode: " + repl.config.normalizeMode, true);
       else {
         repl.config.normalizeMode = normalizeMode;
@@ -120,7 +184,7 @@ public interface ReplCommands {
   @NotNull Command TOGGLE_PRETTY = new Command(ImmutableSeq.of("print-toggle"), "Toggle a pretty printing option") {
     @Entry public @NotNull Command.Result execute(@NotNull AyaRepl repl, @Nullable AyaPrettierOptions.Key key) {
       var builder = new StringBuilder();
-      var map = repl.config.literatePrettier.prettierOptions.map;
+      var map = repl.prettierOptions().map;
       if (key == null) {
         builder.append("Current pretty printing options:");
         for (var k : AyaPrettierOptions.Key.values())

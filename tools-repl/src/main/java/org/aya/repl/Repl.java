@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Yinsen (Tesla) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.repl;
 
@@ -32,12 +32,12 @@ public interface Repl {
         printResult(result.output());
         return result.continueRepl();
       } else printResult(eval(line));
-      // } catch (InterruptException ignored) {
+      // } catch (InterruptException _) {
       // ^ already caught by `eval`
-    } catch (EndOfFileException ignored) {
+    } catch (EndOfFileException _) {
       // user send ctrl-d
       return false;
-    } catch (UserInterruptException ignored) {
+    } catch (UserInterruptException _) {
       // user send ctrl-c
     } catch (Throwable e) {
       var stackTrace = new StringWriter();
@@ -47,7 +47,5 @@ public interface Repl {
     return true;
   }
 
-  default @NotNull String renderDoc(@NotNull Doc doc) {
-    return doc.debugRender();
-  }
+  @NotNull String renderDoc(@NotNull Doc doc);
 }

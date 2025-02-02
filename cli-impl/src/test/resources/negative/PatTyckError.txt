@@ -1,0 +1,350 @@
+UnknownCon:
+In file $FILE:5:2 ->
+
+  3 │   
+  4 │   def test Test1 : Test1
+  5 │   | test2 => test1
+    │     ╰───╯
+
+Error: Unknown constructor
+         test2
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+SelectionFailed:
+In file $FILE:4:2 ->
+
+  2 │   open import data::vec::base
+  3 │   def mapImpl {A B : Type} {n : Nat} (f : A -> B) (xs : Vec (n + n) A) : Vec (n + n) B elim xs
+  4 │   | [] => []
+    │     ╰╯
+
+Error: I'm unsure if there should be a case for
+         []
+       as index unification is blocked for type
+         Vec (<n> + <n>) A
+
+In file $FILE:5:2 ->
+
+  3 │   def mapImpl {A B : Type} {n : Nat} (f : A -> B) (xs : Vec (n + n) A) : Vec (n + n) B elim xs
+  4 │   | [] => []
+  5 │   | _ :> _ => _
+    │     ╰────╯
+
+Error: I'm unsure if there should be a case for
+         :> _ _
+       as index unification is blocked for type
+         Vec (<n> + <n>) A
+
+2 error(s), 0 warning(s).
+Let's learn from that.
+
+SelectionBlocked:
+In file $FILE:4:2 ->
+
+  2 │   open import data::vec::base
+  3 │   def mapImpl {A B : Type} {n : Nat} (f : A -> B) (xs : Vec (n + n) A) : Vec (n + n) B elim xs
+  4 │   | () => []
+    │     ╰╯
+
+Error: Unsure if this pattern is actually impossible, as constructor selection 
+       is blocked on:
+         Vec (<n> + <n>) A
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+SplitOnNonData:
+In file $FILE:3:3 ->
+
+  1 │   open inductive Unit | unit
+  2 │   def test (a : Type) : Type
+  3 │    | unit y => a
+    │      ╰────╯
+
+Error: Cannot split on a non-inductive type
+         Type 0
+       with a constructor pattern
+         unit y
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+TupleOnNonSigma:
+In file $FILE:2:4 ->
+
+  1 │   def test (a' : Type) : Type
+  2 │    | (a, b) => a
+    │       ╰──╯
+  3 │   
+
+Error: The tuple pattern
+         (a, b)
+       splits only on sigma types, while the actual type is not:
+         Type 0
+
+In file $FILE:6:4 ->
+
+  4 │   def Alias => Type
+  5 │   def test2 (a' : Alias) : Type
+  6 │    | (a, b) => a
+    │       ╰──╯
+
+Error: The tuple pattern
+         (a, b)
+       splits only on sigma types, while the actual type is not:
+         Alias
+       Normalized:
+         Type 0
+
+2 error(s), 0 warning(s).
+Let's learn from that.
+
+BadLiteral:
+In file $FILE:3:2 ->
+
+  1 │   open inductive Test | t
+  2 │   def not-conf Test : Test
+  3 │   | 1 => t
+    │     ╰╯
+
+Error: The literal
+         1
+       cannot be encoded as a term of type:
+         Test
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+NotEnoughPattern:
+In file $FILE:3:8 ->
+
+  1 │   open import arith::bool::base
+  2 │   def ifElse {A : Type} (b : Bool) A A : A
+  3 │   | true, x => x
+    │           ╰╯
+
+Error: There is no pattern for the parameter
+         (_ : A)
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+TooManyPattern:
+In file $FILE:3:12 ->
+
+  1 │   open import arith::bool::base
+  2 │   def ifElse {A : Type} (b : Bool) A A : A
+  3 │   | true, x, {y} => x
+    │               ╰╯
+
+Error: There are too many implicit patterns:
+         y
+       should be an explicit pattern matched against
+         (_ : A)
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+TooManyPattern2:
+In file $FILE:3:14 ->
+
+  1 │   open import arith::bool::base
+  2 │   def ifElse {A : Type} (b : Bool) A A : A
+  3 │   | true, x, y, z => x
+    │                 ╰╯
+
+Error: There is no parameter for the pattern
+         z
+       to match against.
+       (and in case it's a function type, you may want to move its parameters 
+       before the `:` in the signature)
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+InvalidEmptyBody:
+In file $FILE:3:2 ->
+
+  1 │   open import arith::bool::base
+  2 │   def test Bool : Bool
+  3 │   | true
+    │     ╰──╯
+
+Error: This match arm does not contain any absurd pattern but it has an empty 
+       body
+
+In file $FILE:4:2 ->
+
+  2 │   def test Bool : Bool
+  3 │   | true
+  4 │   | false
+    │     ╰───╯
+
+Error: This match arm does not contain any absurd pattern but it has an empty 
+       body
+
+2 error(s), 0 warning(s).
+Let's learn from that.
+
+InvalidAbsurdPattern:
+In file $FILE:2:23 ->
+
+  1 │   open import arith::bool::base
+  2 │   def test Bool : Bool | ()
+    │                          ╰╯
+
+Error: Absurd pattern does not fit here because `true` is still available
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+NoPattern:
+In file $FILE:4:0 ->
+
+  2 │   
+  3 │   variable A B : Type
+  4 │   def funExt (f g : A -> B) (p : forall a -> f a = g a) : f = g
+    │   ╰────────────────────────────────────────────────────────────╯
+
+Error: Unhandled case:
+         A, B, f, g, p
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+NewRepoIssue597:
+In file $FILE:2:22 ->
+
+  1 │   open inductive Nat | O | S Nat
+  2 │   def bad Nat : Nat | S S O => O | _ => O
+    │                         ╰╯
+
+Error: There is no pattern for the parameter
+         (_ : Nat)
+
+In file $FILE:2:24 ->
+
+  1 │   open inductive Nat | O | S Nat
+  2 │   def bad Nat : Nat | S S O => O | _ => O
+    │                           ╰╯
+
+Error: There is no parameter for the pattern
+         O
+       to match against.
+       (and in case it's a function type, you may want to move its parameters 
+       before the `:` in the signature)
+
+2 error(s), 0 warning(s).
+Let's learn from that.
+
+NewRepoIssue746:
+In file $FILE:4:2 ->
+
+  2 │   open inductive Test2 | test2
+  3 │   def test Test1 : Test1
+  4 │   | test2 => test1
+    │     ╰───╯
+
+Error: Unknown constructor
+         test2
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+NewRepoIssue384:
+In file $FILE:1:4 ->
+
+  1 │   def test : Type
+    │       ╰──╯
+
+Error: The empty pattern-matching function test does not have a telescope
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+NewRepoIssue1245:
+In file $FILE:2:2 ->
+
+  1 │   open inductive Wrap (A B : Type)
+  2 │   | _ => wrap B
+    │     ╰╯
+  3 │   // Should be skipped by the orga tycker
+
+Error: There is no pattern for the parameter
+         (B : Type 0)
+
+In file $FILE:2:2 ->
+
+  1 │   open inductive Wrap (A B : Type)
+  2 │   | _ => wrap B
+    │     ╰╯
+  3 │   // Should be skipped by the orga tycker
+
+Error: There is no pattern for the parameter
+         (B : Type 0)
+
+2 error(s), 0 warning(s).
+Let's learn from that.
+
+ImplicitPatWithElim:
+In file $FILE:2:6 ->
+
+  1 │   def foo (A : Type) A : A elim A
+  2 │   | _, {a} => a
+    │         ╰╯
+
+Error: Pattern matching with elim is not compatible with implicit patterns.
+
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+UnimportedCon:
+In file $FILE:4:2 ->
+
+  2 │   
+  3 │   def not (b : Bool) : Bool
+  4 │   | true => Bool::false
+    │     ╰──╯
+
+Warning: You wrote the following pattern:
+           true
+         It sounds like you are trying to match with a constructor that is not 
+         in scope, so it will be treated as a variable pattern.
+
+In file $FILE:5:2 ->
+
+  3 │   def not (b : Bool) : Bool
+  4 │   | true => Bool::false
+  5 │   | false => Bool::true
+    │     ╰───╯
+
+Warning: You wrote the following pattern:
+           false
+         It sounds like you are trying to match with a constructor that is not 
+         in scope, so it will be treated as a variable pattern.
+
+In file $FILE:5:2 ->
+
+  3 │   def not (b : Bool) : Bool
+  4 │   | true => Bool::false
+  5 │   | false => Bool::true
+    │     ╰─────────────────╯
+
+Warning: The 2nd clause is dominated by the other clauses, hence unreachable
+
+In file $FILE:13:2 ->
+
+  11 │   
+  12 │   inductive RealCase (b : Bool)
+  13 │   | true => real_true
+     │     ╰──╯
+
+Warning: You wrote the following pattern:
+           true
+         It sounds like you are trying to match with a constructor that is not 
+         in scope, so it will be treated as a variable pattern.
+
+That looks right!
+

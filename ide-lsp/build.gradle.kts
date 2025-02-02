@@ -1,5 +1,6 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
+import org.apache.tools.ant.taskdefs.condition.Os
 import org.aya.gradle.CommonTasks
 import org.aya.gradle.JdkUrls
 import java.nio.file.Files
@@ -48,24 +49,23 @@ fun jdkUrl(platform: String): String = JdkUrls(javaVersion, platform).jdk()
 
 val allPlatformImageDir = layout.buildDirectory.asFile.get().resolve("image-all-platforms")
 jlink {
-  addOptions("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages")
-  addExtraDependencies("jline-terminal-jansi")
+  addOptions("--strip-debug", "--compress", "zip-6", "--no-header-files", "--no-man-pages")
+  addExtraDependencies("jline-terminal-ni")
   imageDir.set(allPlatformImageDir)
   mergedModule {
-    uses("org.jline.terminal.impl.jansi.JansiTerminalProvider")
+    uses("org.jline.terminal.impl.jni.JniTerminalProvider")
     requires("java.logging")
   }
   launcher {
-    mainClass.set(Constants.mainClassQName)
+    mainClass = Constants.mainClassQName
     name = "aya-lsp"
     jvmArgs = mutableListOf("--enable-preview")
   }
   secondaryLauncher {
+    moduleName = "aya.cli.console"
+    mainClass = "org.aya.cli.console.Main"
     name = "aya"
     jvmArgs = mutableListOf("--enable-preview")
-    this as org.beryx.jlink.data.SecondaryLauncherData
-    mainClass = "org.aya.cli.console.Main"
-    moduleName = "aya.cli.console"
   }
   supportedPlatforms.forEach { platform ->
     targetPlatform(platform) {
@@ -83,8 +83,8 @@ supportedPlatforms.forEach { platform ->
   val copyAyaExecutables = tasks.register<Copy>("copyAyaExecutables_$platform") {
     from(file("src/main/shell")) {
       // https://ss64.com/bash/chmod.html
-      fileMode = "755".toInt(8)
-      if (platform.contains("windows")) {
+      filePermissions { unix("755") }
+      if (platform.contains("windows") || platform == "current" && Os.isFamily(Os.FAMILY_WINDOWS)) {
         include("*.bat")
       } else {
         include("*.sh")
@@ -93,19 +93,28 @@ supportedPlatforms.forEach { platform ->
     }
     into(installDir.resolve("bin"))
   }
+  val copySyntaxJar = tasks.register<Sync>("copySyntaxJar_$platform") {
+    from((tasks.getByPath(":syntax:fatJar") as AbstractArchiveTask).archiveFile)
+    rename { "syntax-fat.jar" }
+    into(installDir.resolve("misc"))
+  }
 
-  val copyAyaJRE = tasks.register<Copy>("copyAyaJRE_$platform") {
+  val copyAyaJRE = tasks.register<Sync>("copyAyaJRE_$platform") {
     from(allPlatformImageDir.resolve("aya-lsp-$platform"))
     into(installDir.resolve(Constants.jreDirName))
+    exclude("bin/aya")
+    exclude("bin/aya.bat")
+    exclude("bin/aya-lsp")
+    exclude("bin/aya-lsp.bat")
     dependsOn(jlinkTask)
   }
 
-  val copyAyaLibrary = tasks.register<Copy>("copyAyaLibrary_$platform") {
-    from(rootProject.file("base/src/test/resources/success/common"))
+  val copyAyaLibrary = tasks.register<Sync>("copyAyaLibrary_$platform") {
+    from(rootProject.file("cli-impl/src/test/resources/shared"))
     into(installDir.resolve("std"))
   }
 
-  val copyAyaLicense = tasks.register<Copy>("copyAyaLicense_$platform") {
+  val copyAyaLicense = tasks.register<Sync>("copyAyaLicense_$platform") {
     from(rootProject.file("LICENSE"))
     into(installDir.resolve("licenses"))
   }
@@ -113,21 +122,14 @@ supportedPlatforms.forEach { platform ->
   val packageAya = tasks.register<Zip>("packageAya_$platform") {
     val fileName = "aya-prover_jlink_$platform.zip"
     val sha256FileName = "$fileName.sha256.txt"
-    dependsOn(copyAyaJRE)
-    dependsOn(copyAyaExecutables)
-    dependsOn(copyAyaLibrary)
+    dependsOn(copyAyaJRE, copyAyaExecutables, copyAyaLibrary)
     archiveFileName.set(fileName)
     destinationDirectory.set(ayaImageDir)
+    val executables = arrayOf("bin/aya", "bin/aya-lsp", "${Constants.jreDirName}/bin/java")
+    from(installDir) { exclude(*executables) }
     from(installDir) {
-      exclude("bin/aya")
-      exclude("bin/aya-lsp")
-      exclude("${Constants.jreDirName}/bin/**")
-    }
-    from(installDir) {
-      include("bin/aya")
-      include("bin/aya-lsp")
-      include("${Constants.jreDirName}/bin/**")
-      fileMode = "755".toInt(8)
+      include(*executables)
+      filePermissions { unix("755") }
     }
     doLast {
       val bytes = MessageDigest.getInstance("SHA-256")
@@ -141,11 +143,9 @@ supportedPlatforms.forEach { platform ->
   }
 
   ayaJlinkTask.configure {
-    dependsOn(copyAyaJRE, copyAyaExecutables, copyAyaLibrary, copyAyaLicense)
+    dependsOn(copyAyaJRE, copySyntaxJar, copyAyaExecutables, copyAyaLibrary, copyAyaLicense)
   }
-  ayaJlinkZipTask.configure {
-    dependsOn(packageAya)
-  }
+  ayaJlinkZipTask.configure { dependsOn(packageAya) }
 }
 
 val prepareMergedJarsDirTask = tasks.named("prepareMergedJarsDir")
@@ -165,10 +165,7 @@ tasks.withType<AbstractCopyTask>().configureEach {
 
 if (rootProject.hasProperty("installDir")) {
   val destDir = file(rootProject.property("installDir")!!)
-  // val dbi = tasks.register<Delete>("deleteBeforeInstall") {
-  //   delete(File.listFiles(destDir))
-  // }
-  tasks.register<Copy>("install") {
+  tasks.register<Sync>("install") {
     dependsOn(ayaJlinkTask, prepareMergedJarsDirTask)
     from(ayaImageDir.resolve(currentPlatform))
     into(destDir)

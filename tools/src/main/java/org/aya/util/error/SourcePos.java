@@ -1,10 +1,11 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.util.error;
 
+import com.intellij.openapi.util.TextRange;
+import com.intellij.openapi.util.text.LineColumn;
+import com.intellij.openapi.util.text.StringUtil;
 import kala.collection.SeqView;
-import org.aya.pretty.error.LineColSpan;
-import org.aya.pretty.error.Span;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
@@ -27,17 +28,13 @@ public record SourcePos(
   int endColumn
 ) implements Comparable<SourcePos> {
   public SourcePos {
-    assert tokenEndIndex >= tokenStartIndex;
+    assert tokenEndIndex >= tokenStartIndex - 1;
   }
 
   /** Single instance SourcePos for mocking tests and other usages. */
   public static final SourcePos NONE = new SourcePos(SourceFile.NONE, -1, -1, -1, -1, -1, -1);
   /** Source pos used in serialized core */
   public static final SourcePos SER = new SourcePos(SourceFile.SER, -1, -1, -1, -1, -1, -1);
-
-  public @NotNull Span toSpan() {
-    return new LineColSpan(file().sourceCode(), startLine, startColumn, endLine, endColumn);
-  }
 
   private static int min(int x, int y) {
     if (x == -1) return y;
@@ -105,12 +102,10 @@ public record SourcePos(
     return tokenStartIndex <= x.tokenStartIndex && tokenEndIndex >= x.tokenEndIndex;
   }
 
-  public boolean belongsToSomeFile() {
-    return this != SourcePos.NONE && file.isSomeFile();
-  }
-
-  public int linesOfCode() {
-    return endLine - startLine + 1;
+  public boolean belongsToSomeFile() { return this != SourcePos.NONE && file.isSomeFile(); }
+  public int linesOfCode() { return endLine - startLine + 1; }
+  public boolean oneLinear() {
+    return startLine == endLine;
   }
 
   public @NotNull SourcePos sourcePosForSubExpr(@NotNull SeqView<SourcePos> params) {
@@ -135,26 +130,46 @@ public record SourcePos(
   }
 
   @Override public String toString() {
-    return STR."(\{tokenStartIndex}-\{tokenEndIndex}) [\{startLine},\{startColumn}-\{endLine},\{endColumn}\{']'}";
+    return "(" + tokenStartIndex + "-" + tokenEndIndex + ") [" + lineColumnString() + ']';
+  }
+  public @NotNull String lineColumnString() {
+    return startLine + ":" + startColumn + "-" + endLine + ":" + endColumn;
   }
 
-  @Override
-  public int hashCode() {
+  @Override public int hashCode() {
     // the equals() returns true in tests, so hashCode() should
     // be a constant according to JLS
     if (Global.UNITE_SOURCE_POS) return 0;
     return Objects.hash(tokenStartIndex, tokenEndIndex, startLine, startColumn, endLine, endColumn);
   }
 
-  @Override public int compareTo(@NotNull SourcePos o) {
-    return Integer.compare(tokenStartIndex, o.tokenStartIndex);
+  @Override public int compareTo(@NotNull SourcePos o) { return Integer.compare(tokenStartIndex, o.tokenStartIndex); }
+  public boolean isEmpty() { return length() <= 0; }
+  private int length() { return tokenEndIndex - tokenStartIndex + 1; }
+  public @NotNull SourcePos coalesceLeft() {
+    return new SourcePos(file, tokenStartIndex, tokenStartIndex - 1,
+      startLine, startColumn, startLine, startColumn);
   }
 
-  public boolean isEmpty() {
-    return size() <= 0;
+  public enum NowLoc {
+    Shot, Start, End, Between, None,
   }
 
-  private int size() {
-    return tokenEndIndex - tokenStartIndex + 1;
+  public @NotNull NowLoc nowLoc(int currentLine) {
+    if (currentLine == startLine) return oneLinear() ? NowLoc.Shot : NowLoc.Start;
+    if (currentLine == endLine) return NowLoc.End;
+    if (currentLine > startLine && currentLine < endLine) return NowLoc.Between;
+    return NowLoc.None;
+  }
+
+  public static @NotNull SourcePos of(@NotNull TextRange range, @NotNull SourceFile file, boolean singleLine) {
+    var start = StringUtil.offsetToLineColumn(file.sourceCode(), range.getStartOffset());
+    var length = range.getLength();
+    var endOffset = range.getEndOffset() - (length == 0 ? 0 : 1);
+    var end = singleLine || length == 0
+      ? LineColumn.of(start.line, start.column + length - 1)
+      : StringUtil.offsetToLineColumn(file.sourceCode(), endOffset);
+    return new SourcePos(file, range.getStartOffset(), endOffset,
+      start.line + 1, start.column, end.line + 1, end.column);
   }
 }

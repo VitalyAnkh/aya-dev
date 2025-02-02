@@ -1,40 +1,58 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.interactive;
 
+import kala.collection.Seq;
+import kala.collection.SeqView;
+import kala.collection.immutable.ImmutableMap;
 import kala.collection.immutable.ImmutableSeq;
-import org.aya.concrete.stmt.Stmt;
-import org.aya.ref.AnyVar;
-import org.aya.ref.DefVar;
-import org.aya.resolve.context.*;
+import kala.collection.mutable.MutableLinkedSet;
+import kala.collection.mutable.MutableList;
+import kala.collection.mutable.MutableMap;
+import kala.collection.mutable.MutableSet;
+import kala.tuple.Tuple2;
+import org.aya.resolve.context.Context;
+import org.aya.resolve.context.ModuleExport;
+import org.aya.resolve.context.ModuleSymbol;
+import org.aya.resolve.context.PhysicalModuleContext;
+import org.aya.syntax.concrete.stmt.ModuleName;
+import org.aya.syntax.concrete.stmt.Stmt;
+import org.aya.syntax.ref.AnyDefVar;
+import org.aya.syntax.ref.AnyVar;
+import org.aya.syntax.ref.DefVar;
+import org.aya.syntax.ref.ModulePath;
 import org.aya.util.RepoLike;
 import org.aya.util.error.SourcePos;
+import org.aya.util.reporter.Reporter;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public final class ReplContext extends PhysicalModuleContext implements RepoLike<ReplContext> {
   private @Nullable ReplContext downstream = null;
+  /** @see #moduleTree() */
+  private boolean modified = true;
+  private @Nullable ImmutableMap<String, ModuleTrie> moduleTree = null;
 
-  public ReplContext(@NotNull Context parent, @NotNull ModulePath name) {
-    super(parent, name);
+  public ReplContext(@NotNull Reporter reporter, @NotNull Context parent, @NotNull ModulePath name) {
+    super(reporter, parent, name);
   }
 
   @Override public void importSymbol(
-    boolean imported,
     @NotNull AnyVar ref,
-    @NotNull ModuleName modName,
+    @NotNull ModuleName fromModule,
     @NotNull String name,
-    Stmt.@NotNull Accessibility acc,
+    @NotNull Stmt.Accessibility acc,
     @NotNull SourcePos sourcePos
   ) {
+    modified = true;
     // REPL always overwrites symbols.
-    symbols().add(modName, name, ref);
-    if (ref instanceof DefVar<?, ?> defVar && acc == Stmt.Accessibility.Public) exportSymbol(modName, name, defVar);
+    symbols().add(name, ref, fromModule);
+    if (ref instanceof DefVar<?, ?> defVar && acc == Stmt.Accessibility.Public) exportSymbol(name, defVar);
   }
 
-  @Override public boolean exportSymbol(@NotNull ModuleName modName, @NotNull String name, @NotNull DefVar<?, ?> ref) {
-    super.exportSymbol(modName, name, ref);
+  @Override public boolean exportSymbol(@NotNull String name, @NotNull AnyDefVar ref) {
+    super.exportSymbol(name, ref);
     // REPL always overwrites symbols.
     return true;
   }
@@ -45,16 +63,17 @@ public final class ReplContext extends PhysicalModuleContext implements RepoLike
     Stmt.@NotNull Accessibility accessibility,
     @NotNull SourcePos sourcePos
   ) {
+    modified = true;
     modules.put(modName, mod);
     if (accessibility == Stmt.Accessibility.Public) exports.export(modName, mod);
   }
 
-  @Override public @NotNull ReplContext derive(@NotNull ImmutableSeq<@NotNull String> extraName) {
-    return new ReplContext(this, this.modulePath().derive(extraName));
+  @Override public @NotNull ReplContext derive(@NotNull ModulePath extraName, @NotNull Reporter reporter) {
+    return new ReplContext(reporter, this, modulePath().derive(extraName));
   }
 
-  @Override public @NotNull ReplContext derive(@NotNull String extraName) {
-    return new ReplContext(this, this.modulePath().derive(extraName));
+  @Override public @NotNull ReplContext derive(@NotNull String extraName, @NotNull Reporter reporter) {
+    return new ReplContext(reporter, this, modulePath().derive(extraName));
   }
 
   @Override public void setDownstream(@Nullable ReplContext downstream) {
@@ -62,7 +81,7 @@ public final class ReplContext extends PhysicalModuleContext implements RepoLike
   }
 
   public @NotNull ReplContext fork() {
-    var kid = derive(":theKid");
+    var kid = derive(":theKid", reporter);
     fork(kid);
     return kid;
   }
@@ -71,15 +90,17 @@ public final class ReplContext extends PhysicalModuleContext implements RepoLike
     var bors = downstream;
     RepoLike.super.merge();
     if (bors == null) return;
+    modified = true;
     mergeSymbols(symbols, bors.symbols);
-    mergeSymbols(exports.symbols(), bors.exports.symbols());
+    exports.symbols().putAll(bors.exports.symbols());
     exports.modules().putAll(bors.exports.modules());
     modules.putAll(bors.modules);
   }
 
   @Contract(mutates = "this") public void clear() {
+    modified = true;
     modules.clear();
-    exports.symbols().table().clear();
+    exports.symbols().clear();
     exports.modules().clear();
     symbols.table().clear();
   }
@@ -88,7 +109,96 @@ public final class ReplContext extends PhysicalModuleContext implements RepoLike
    * @apiNote It is possible that putting {@link ModuleName.Qualified} and {@link ModuleName.ThisRef} to the same name,
    * so be careful about {@param rhs}
    */
-  private static <T> void mergeSymbols(@NotNull ModuleSymbol<T> lhs, @NotNull ModuleSymbol<T> rhs) {
-    rhs.table().forEach((uname, candy) -> lhs.resolveUnqualified(uname).asMut().get().putAll(candy));
+  private static <T> void mergeSymbols(@NotNull ModuleSymbol<T> dest, @NotNull ModuleSymbol<T> src) {
+    for (var key : src.table().keysView()) {
+      var candy = dest.get(key);
+      dest.table().put(key, candy.merge(src.get(key)));
+    }
   }
+
+  // region Rebuild Module Tree
+
+  public record ModuleTrie(@NotNull ImmutableMap<String, ModuleTrie> children, boolean inhabited) { }
+
+  private @Nullable ReplContext.ModuleTrie resolve(@NotNull ImmutableSeq<String> path) {
+    var pathView = path.view();
+    var tree = new ModuleTrie(moduleTree(), false);
+    while (pathView.isNotEmpty() && tree != null) {
+      var head = pathView.getFirst();
+      var tail = pathView.drop(1);
+      tree = tree.children().getOrNull(head);
+      pathView = tail;
+    }
+
+    return tree;
+  }
+
+  public @NotNull ImmutableSeq<String> giveMeHint(@NotNull ImmutableSeq<String> prefix) {
+    var node = resolve(prefix);
+    if (node == null) return ImmutableSeq.empty();
+
+    var hint = MutableLinkedSet.<String>create();
+
+    hint.addAll(node.children().keysView());
+    if (node.inhabited) {
+      var mod = getModuleMaybe(new ModuleName.Qualified(prefix));
+      assert mod != null;
+      hint.addAll(mod.symbols().keysView());
+    }
+
+    return hint.toImmutableSeq();
+  }
+
+  public @NotNull ImmutableMap<String, ModuleTrie> moduleTree() {
+    if (!modified) {
+      assert this.moduleTree != null;
+      return this.moduleTree;
+    }
+
+    var moduleNames = this.modules.keysView().toImmutableSeq()
+      .map(x -> x.ids().view());
+
+    this.moduleTree = buildModuleTree(moduleNames);
+    this.modified = false;
+
+    return moduleTree;
+  }
+
+  /**
+   * Rebuild module tree from flattened module names
+   *
+   * @param moduleNames a list of {@link ModuleName.Qualified} but in an efficient representation, the element should be non-empty
+   */
+  private @NotNull ImmutableMap<String, ModuleTrie>
+  buildModuleTree(@NotNull Seq<SeqView<String>> moduleNames) {
+    if (moduleNames.isEmpty()) {
+      return ImmutableMap.empty();
+    }
+
+    var indexed = MutableMap.<String, MutableList<SeqView<String>>>create();
+    var inhabited = MutableSet.<String>create();
+
+    // merge module names those have the same 1-length prefix
+    // also mark 1-length name as inhabited
+    for (var name : moduleNames) {
+      var head = name.getFirst();
+      var tail = name.drop(1);
+      // we always create a record even [tail] is empty, it is used to trigger the creation of ModuleTrie.
+      var root = indexed.getOrPut(head, MutableList::create);
+      if (tail.isNotEmpty()) {
+        root.append(tail);
+      } else {
+        inhabited.add(head);
+      }
+    }
+
+    return indexed.toImmutableSeq()
+      .collect(ImmutableMap.collector(Tuple2::component1, x -> {
+        var children = buildModuleTree(x.component2());
+        var isInhabited = inhabited.contains(x.component1());
+        return new ModuleTrie(children, isInhabited);
+      }));
+  }
+
+  // endregion Rebuild Module Tree
 }

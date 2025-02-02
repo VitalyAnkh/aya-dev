@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.console;
 
@@ -81,6 +81,10 @@ public class MainArgs {
   public PrettyFormat prettyFormat;
   @Option(names = {"--pretty-dir"}, description = "Specify output directory of pretty printing.")
   public String prettyDir;
+  @Option(names = {"--datetime-front-matter-key"}, description = "If set, add datetime in the front matter using the value as YAML key.")
+  public String datetimeFrontMatterKey;
+  @Option(names = {"--datetime-front-matter"}, description = "Overwrites the datetime in the front matter.")
+  public String datetimeFrontMatterValue;
   @Option(names = {"--pretty-color"}, description = "The color theme of pretty printing." + CANDIDATES, defaultValue = "emacs")
   public PredefinedStyle prettyColor;
   @Option(names = {"--pretty-no-code-style"}, description = "Do not include default highlight styles.")
@@ -89,8 +93,6 @@ public class MainArgs {
   public boolean prettyInlineCodeStyle;
   @Option(names = {"--pretty-ssr"}, description = "Generate Server-Side-Rendering code for literate output.")
   public boolean prettySSR;
-  @Option(names = {"--trace"}, description = "Enable tracing.")
-  public boolean enableTrace;
   @Option(names = {"--ascii-only"}, description = "Do not show unicode in success/fail message.")
   public boolean asciiOnly;
   @Option(names = {"--module-path"}, description = "Search for module under this path.")
@@ -99,6 +101,8 @@ public class MainArgs {
   public Problem.Severity verbosity;
   @Option(names = {"--fake-literate"}, description = "Generate literate output without compiling.")
   public boolean fakeLiterate;
+  @Option(names = {"--no-prelude"}, description = "Disable the implicit import of the prelude.")
+  public boolean noPrelude;
 
   @Parameters(paramLabel = "<input-file>", defaultValue = "null", description = "File to compile")
   public String inputFile;

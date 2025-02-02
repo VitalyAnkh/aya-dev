@@ -1,87 +1,80 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2025 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.tyck.pat;
 
+import kala.collection.Seq;
 import kala.collection.immutable.ImmutableSeq;
 import kala.collection.mutable.MutableLinkedSet;
+import kala.collection.mutable.MutableList;
 import kala.collection.mutable.MutableSet;
-import kala.tuple.Tuple;
-import kala.tuple.primitive.IntObjTuple2;
-import org.aya.core.pat.Pat;
-import org.aya.core.pat.PatUnify;
-import org.aya.core.term.ErrorTerm;
-import org.aya.core.term.MetaTerm;
-import org.aya.core.term.RefTerm;
-import org.aya.core.term.Term;
-import org.aya.core.visitor.DeltaExpander;
-import org.aya.core.visitor.Subst;
+import org.aya.syntax.core.def.FnClauseBody;
+import org.aya.syntax.core.term.FreeTerm;
+import org.aya.syntax.core.term.Param;
+import org.aya.syntax.core.term.Term;
+import org.aya.syntax.ref.LocalCtx;
 import org.aya.tyck.ExprTycker;
-import org.aya.tyck.env.LocalCtx;
+import org.aya.tyck.error.ClausesProblem;
 import org.aya.tyck.error.UnifyInfo;
-import org.aya.util.Arg;
 import org.aya.util.error.SourcePos;
-import org.aya.util.tyck.pat.PatClass;
+import org.aya.util.error.WithPos;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * YouTrack checks confluence.
  *
- * @author ice1000
  * @see PatClassifier#classify
  */
 public record YouTrack(
-  @NotNull ImmutableSeq<Term.Param> telescope,
+  @NotNull ImmutableSeq<Param> telescope,
   @NotNull ExprTycker tycker, @NotNull SourcePos pos
 ) {
+  private record Info(int ix, @NotNull WithPos<Term.Matching> matching) { }
   private void unifyClauses(
-    Term result,
-    IntObjTuple2<Term.Matching> lhsInfo,
-    IntObjTuple2<Term.Matching> rhsInfo,
+    Term result, Info lhsInfo, Info rhsInfo,
     MutableSet<ClausesProblem.Domination> doms
   ) {
-    var lhsSubst = new Subst();
-    var rhsSubst = new Subst();
-    var ctx = PatUnify.unifyPat(
-      lhsInfo.component2().patterns().view().map(Arg::term),
-      rhsInfo.component2().patterns().view().map(Arg::term),
-      lhsSubst, rhsSubst, tycker.ctx.deriveMap());
-    domination(ctx, rhsSubst, lhsInfo.component1(), rhsInfo.component1(), rhsInfo.component2(), doms);
-    domination(ctx, lhsSubst, rhsInfo.component1(), lhsInfo.component1(), lhsInfo.component2(), doms);
-    var lhsTerm = lhsInfo.component2().body().subst(lhsSubst);
-    var rhsTerm = rhsInfo.component2().body().subst(rhsSubst);
-    // TODO: Currently all holes at this point are in an ErrorTerm
-    if (lhsTerm instanceof ErrorTerm error && error.description() instanceof MetaTerm hole) {
-      hole.ref().conditions.append(Tuple.of(lhsSubst, rhsTerm));
-    } else if (rhsTerm instanceof ErrorTerm error && error.description() instanceof MetaTerm hole) {
-      hole.ref().conditions.append(Tuple.of(rhsSubst, lhsTerm));
-    }
-    var resultSubst = DeltaExpander.buildSubst(telescope, Arg.mapSeq(lhsInfo.component2().patterns(), Pat::toTerm));
-    resultSubst.add(lhsSubst);
-    tycker.unifyReported(lhsTerm, rhsTerm, result.subst(resultSubst), pos, ctx, comparison ->
-      new ClausesProblem.Confluence(pos, rhsInfo.component1() + 1, lhsInfo.component1() + 1,
-        comparison, new UnifyInfo(tycker.state), rhsInfo.component2().sourcePos(), lhsInfo.component2().sourcePos()));
+    var ctx = tycker.localCtx();
+    var unifyResult = PatUnify.unifyPat(
+      lhsInfo.matching.data().patterns().view(),
+      rhsInfo.matching.data().patterns().view(), ctx,
+      MutableList.create(), MutableList.create());
+    var unify = unifyResult.unify();
+    domination(ctx, unify.rhsSubst(), lhsInfo.ix, rhsInfo.ix, rhsInfo.matching, doms);
+    domination(ctx, unify.lhsSubst(), rhsInfo.ix, lhsInfo.ix, lhsInfo.matching, doms);
+    var lhsTerm = lhsInfo.matching.data().body().instTele(unify.lhsSubst().view());
+    var rhsTerm = rhsInfo.matching.data().body().instTele(unify.rhsSubst().view());
+    // // TODO: Currently all holes at this point are in an ErrorTerm
+    // if (lhsTerm instanceof ErrorTerm error && error.description() instanceof MetaCall hole) {
+    //   hole.ref().conditions.append(Tuple.of(lhsSubst, rhsTerm));
+    // }
+    // if (rhsTerm instanceof ErrorTerm error && error.description() instanceof MetaCall hole) {
+    //   hole.ref().conditions.append(Tuple.of(rhsSubst, lhsTerm));
+    // }
+    result = tycker.whnf(result.instTele(unifyResult.args().view()));
+    tycker.unifyTermReported(lhsTerm, rhsTerm, result, pos, comparison ->
+      new ClausesProblem.Confluence(pos, rhsInfo.ix + 1, lhsInfo.ix + 1,
+        comparison, new UnifyInfo(tycker.state), rhsInfo.matching.sourcePos(), lhsInfo.matching.sourcePos()));
   }
 
   private void domination(
-    LocalCtx ctx, Subst rhsSubst,
-    int lhsIx, int rhsIx, Term.Matching matching,
+    LocalCtx ctx, Seq<Term> subst,
+    int lhsIx, int rhsIx, WithPos<Term.Matching> matching,
     MutableSet<ClausesProblem.Domination> doms
   ) {
-    if (rhsSubst.map().valuesView().allMatch(dom ->
-      dom instanceof RefTerm(var ref) && ctx.contains(ref))
-    ) doms.add(new ClausesProblem.Domination(
-      lhsIx + 1, rhsIx + 1, matching.sourcePos()));
+    if (subst.allMatch(dom -> dom instanceof FreeTerm(var ref) && ctx.contains(ref)))
+      doms.add(new ClausesProblem.Domination(lhsIx + 1, rhsIx + 1, matching.sourcePos()));
   }
 
-  public void check(@NotNull ClauseTycker.PatResult clauses, @NotNull ImmutableSeq<PatClass<ImmutableSeq<Arg<Term>>>> mct) {
+  public void check(@NotNull FnClauseBody body, @NotNull Term type) {
     var doms = MutableLinkedSet.<ClausesProblem.Domination>create();
-    mct.forEach(results -> {
-      var contents = results.cls()
-        .flatMapToObj(i -> Pat.Preclause.lift(clauses.clauses().get(i))
-          .map(matching -> IntObjTuple2.of(i, matching)));
-      for (int i = 1, size = contents.size(); i < size; i++)
-        unifyClauses(clauses.result(), contents.get(i - 1), contents.get(i), doms);
+    body.classes.forEach(results -> {
+      var contents = results.cls().mapToObj(i -> new Info(i, body.clauses.get(i)));
+      for (int i = 1, size = contents.size(); i < size; i++) {
+        try (var _ = tycker.subscope()) {
+          unifyClauses(type, contents.get(i - 1), contents.get(i), doms);
+        }
+      }
     });
-    doms.forEach(tycker.reporter::report);
+    doms.forEach(tycker::fail);
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.console;
 
@@ -6,18 +6,15 @@ import org.aya.cli.interactive.ReplConfig;
 import org.aya.cli.library.LibraryCompiler;
 import org.aya.cli.library.incremental.CompilerAdvisor;
 import org.aya.cli.literate.FlclFaithfulPrettier;
-import org.aya.cli.parse.FlclParser;
 import org.aya.cli.plct.PLCTReport;
 import org.aya.cli.render.RenderOptions;
 import org.aya.cli.repl.AyaRepl;
 import org.aya.cli.single.CompilerFlags;
 import org.aya.cli.single.SingleFileCompiler;
 import org.aya.cli.utils.CliEnums;
-import org.aya.core.def.PrimDef;
 import org.aya.prettier.AyaPrettierOptions;
-import org.aya.pretty.printer.PrinterConfig;
-import org.aya.tyck.trace.MarkdownTrace;
-import org.aya.tyck.trace.Trace;
+import org.aya.primitive.PrimFactory;
+import org.aya.producer.flcl.FlclParser;
 import org.aya.util.FileUtil;
 import org.aya.util.error.SourceFile;
 import org.aya.util.error.SourceFileLocator;
@@ -37,9 +34,10 @@ public class Main extends MainArgs implements Callable<Integer> {
   }
 
   @Override public Integer call() throws Exception {
+    if ("null".equals(inputFile)) inputFile = null;
     if (action != null) {
       if (action.repl != null)
-        return AyaRepl.start(modulePaths().map(Paths::get), action.repl);
+        return AyaRepl.start(modulePaths().map(Paths::get), !noPrelude, inputFile, action.repl);
       if (action.plct != null)
         return new PLCTReport().run(action.plct);
     }
@@ -56,6 +54,7 @@ public class Main extends MainArgs implements Callable<Integer> {
 
   private int doFakeLiterate() throws IOException {
     var replConfig = ReplConfig.loadFromDefault();
+    replConfig.loadPrelude = !noPrelude;
     var prettierOptions = replConfig.literatePrettier.prettierOptions;
     var reporter = AnsiReporter.stdio(!asciiOnly, prettierOptions, verbosity);
     var renderOptions = createRenderOptions(replConfig);
@@ -84,6 +83,7 @@ public class Main extends MainArgs implements Callable<Integer> {
     var filePath = Paths.get(inputFile);
     var outputPath = outputFile == null ? null : Paths.get(outputFile);
     var replConfig = ReplConfig.loadFromDefault();
+    replConfig.loadPrelude = !noPrelude;
     var prettierOptions = replConfig.literatePrettier.prettierOptions;
     var reporter = AnsiReporter.stdio(!asciiOnly, prettierOptions, verbosity);
     var renderOptions = createRenderOptions(replConfig);
@@ -95,42 +95,34 @@ public class Main extends MainArgs implements Callable<Integer> {
       outputPath);
 
     if (compile.isLibrary || compile.isRemake || compile.isNoCode) {
-      // TODO: move to a new tool
       var advisor = compile.isNoCode ? CompilerAdvisor.inMemory() : CompilerAdvisor.onDisk();
-      return LibraryCompiler.compile(new PrimDef.Factory(), reporter, flags, advisor, filePath);
+      return LibraryCompiler.compile(new PrimFactory(), reporter, flags, advisor, filePath);
     }
-    var traceBuilder = enableTrace ? new Trace.Builder() : null;
-    var compiler = new SingleFileCompiler(reporter, null, traceBuilder);
+    var compiler = new SingleFileCompiler(reporter, flags, null);
     if (Files.notExists(filePath)) {
       System.err.println("File not found: " + filePath);
       return -1;
     }
-    var status = compiler.compile(filePath, flags, null);
-    if (traceBuilder != null)
-      System.err.println(new MarkdownTrace(2, prettierOptions, asciiOnly)
-        .docify(traceBuilder).renderToString(PrinterConfig.INFINITE_SIZE, !asciiOnly));
-    return status;
+    return compiler.compile(filePath, null);
   }
 
-  private @Nullable CompilerFlags.PrettyInfo
-  computePrettyInfo(
+  private @Nullable CompilerFlags.PrettyInfo computePrettyInfo(
     @Nullable Path outputPath,
     RenderOptions renderOptions, AyaPrettierOptions prettierOptions
   ) {
-    return prettyStage == null
-      ? (outputPath != null ? CompilerFlags.prettyInfoFromOutput(
-      outputPath, renderOptions, prettyNoCodeStyle, prettyInlineCodeStyle, prettySSR) : null)
-      : new CompilerFlags.PrettyInfo(
-        asciiOnly,
-        prettyNoCodeStyle,
-        prettyInlineCodeStyle,
-        prettySSR,
-        prettyStage,
-        prettyFormat,
-        prettierOptions,
-        renderOptions,
-        prettyDir
-      );
+    if (prettyStage == null)
+      return outputPath != null ? CompilerFlags.prettyInfoFromOutput(
+        outputPath, renderOptions, prettyNoCodeStyle, prettyInlineCodeStyle, prettySSR) : null;
+    return new CompilerFlags.PrettyInfo(
+      asciiOnly,
+      prettyNoCodeStyle,
+      prettyInlineCodeStyle,
+      prettySSR,
+      prettyStage,
+      prettyFormat,
+      prettierOptions, renderOptions,
+      datetimeFrontMatterKey, datetimeFrontMatterValue, prettyDir
+    );
   }
 
   private @NotNull RenderOptions createRenderOptions(@NotNull ReplConfig replConfig) {
@@ -138,7 +130,7 @@ public class Main extends MainArgs implements Callable<Integer> {
     switch (prettyColor) {
       case emacs -> renderOptions.colorScheme = RenderOptions.ColorSchemeName.Emacs;
       case intellij -> renderOptions.colorScheme = RenderOptions.ColorSchemeName.IntelliJ;
-      case null -> {}
+      case null -> { }
     }
     return renderOptions;
   }

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.plct;
 
@@ -9,6 +9,7 @@ import kala.tuple.Tuple;
 import kala.tuple.Tuple2;
 import org.aya.cli.console.MainArgs;
 import org.aya.pretty.doc.Doc;
+import org.aya.repl.ReplUtil;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 
@@ -21,6 +22,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.function.Consumer;
 
 public final class PLCTReport {
   @NotNull
@@ -29,8 +31,17 @@ public final class PLCTReport {
     Tuple.of("Aya VSCode", "aya-prover/aya-vscode"),
     Tuple.of("Aya Intellij Plugin", "aya-prover/intellij-aya")
   );
-  public static final @NotNull @Nls String SHRUG = "\ud83e\udd37";
+  public static final @NotNull @Nls String SHRUG = "🤷";
   private final @NotNull HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
+  private Consumer<String> out;
+
+  {
+    try {
+      out = ReplUtil.jlineDumbTerminalWriter();
+    } catch (Exception _) {
+      out = System.out::println;
+    }
+  }
 
   private Doc pullRequest(GsonClasses.PR i) {
     return Doc.sepNonEmpty(
@@ -52,7 +63,7 @@ public final class PLCTReport {
 
   public int run(@NotNull MainArgs.PlctAction args) throws Exception {
     if (!args.plctReport) {
-      System.out.println(SHRUG);
+      out.accept(SHRUG);
       return 1;
     }
     Doc markdown;
@@ -60,7 +71,7 @@ public final class PLCTReport {
     if (args.reportSince > 0) {
       since = LocalDate.now().minusDays(args.reportSince).atStartOfDay();
     } else if (args.reportSince < 0) {
-      System.out.println(SHRUG);
+      out.accept(SHRUG);
       return 1;
     } else since = sinceDate().atStartOfDay();
     if (args.repoName != null) {
@@ -71,15 +82,12 @@ public final class PLCTReport {
         .view()
         .prepended(Doc.plain("## The Aya Theorem Prover")));
     }
-    System.out.println(markdown.debugRender());
+    out.accept(markdown.debugRender());
     return 0;
   }
 
   public @NotNull Doc generate(@NotNull String name, @NotNull String repo, LocalDateTime since) throws IOException, InterruptedException {
-    var req = HttpRequest.newBuilder().GET()
-      .uri(URI.create("https://api.github.com/repos/" + repo + "/pulls?state=closed&sort=updated&direction=desc&per_page=100"))
-      .build();
-
+    var req = buildRequest("https://api.github.com/repos/" + repo + "/pulls?state=closed&sort=updated&direction=desc&per_page=100");
     var seq = parse(client.send(req, HttpResponse.BodyHandlers.ofInputStream()).body())
       .view()
       .filter(i -> i.updatedAt.isAfter(since))
@@ -95,6 +103,12 @@ public final class PLCTReport {
       .prepended(Doc.empty()));
   }
 
+  public static HttpRequest buildRequest(String uri) {
+    return HttpRequest.newBuilder().GET()
+      .uri(URI.create(uri))
+      .build();
+  }
+
   public static @NotNull LocalDate sinceDate() {
     var now = LocalDate.now();
     var year = now.getYear();
@@ -104,7 +118,7 @@ public final class PLCTReport {
       ? LocalDate.of(year, month, 1)
       // Generating the report at the start of next month -- collect last month
       : month == 1 ? LocalDate.of(year - 1, 12, 1)
-      : LocalDate.of(year, month - 1, 1);
+        : LocalDate.of(year, month - 1, 1);
   }
 
   public static @NotNull ImmutableSeq<GsonClasses.PR> parse(@NotNull InputStream input) {

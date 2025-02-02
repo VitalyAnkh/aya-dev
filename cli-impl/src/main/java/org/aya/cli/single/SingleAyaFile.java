@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.single;
 
@@ -8,20 +8,21 @@ import kala.function.BooleanObjBiFunction;
 import org.aya.cli.render.RenderOptions;
 import org.aya.cli.utils.CliEnums;
 import org.aya.cli.utils.LiterateData;
-import org.aya.concrete.GenericAyaFile;
-import org.aya.concrete.GenericAyaParser;
-import org.aya.concrete.stmt.Stmt;
-import org.aya.concrete.stmt.decl.Decl;
-import org.aya.core.def.Def;
-import org.aya.core.def.PrimDef;
 import org.aya.generic.AyaDocile;
-import org.aya.generic.util.AyaFiles;
 import org.aya.literate.Literate;
 import org.aya.pretty.doc.Doc;
 import org.aya.resolve.ResolveInfo;
+import org.aya.syntax.AyaFiles;
+import org.aya.syntax.GenericAyaFile;
+import org.aya.syntax.GenericAyaParser;
+import org.aya.syntax.concrete.stmt.Stmt;
+import org.aya.syntax.concrete.stmt.decl.Decl;
+import org.aya.syntax.core.def.PrimDef;
+import org.aya.syntax.core.def.TyckDef;
 import org.aya.util.FileUtil;
 import org.aya.util.error.SourceFile;
 import org.aya.util.error.SourceFileLocator;
+import org.aya.util.more.StringUtil;
 import org.aya.util.prettier.PrettierOptions;
 import org.aya.util.reporter.CollectingReporter;
 import org.aya.util.reporter.Problem;
@@ -64,7 +65,11 @@ public sealed interface SingleAyaFile extends GenericAyaFile {
 
     var renderOptions = flags.renderOptions();
     if (currentStage == CliEnums.PrettyStage.literate) {
-      var d = toDoc((ImmutableSeq<Stmt>) doc, reporter.problems().toImmutableSeq(), flags.prettierOptions());
+      var value = flags.datetimeFrontMatterValue();
+      if (value == null) value = StringUtil.timeInGitFormat();
+      var frontMatter = new LiterateData.InjectedFrontMatter(flags.datetimeFrontMatterKey(), value);
+      var d = toDoc((ImmutableSeq<Stmt>) doc, reporter.problems().toImmutableSeq(),
+        frontMatter, flags.prettierOptions());
       var text = renderOptions.render(out, d, flags.backendOpts(true));
       FileUtil.writeString(prettyDir.resolve(fileName), text);
     } else {
@@ -75,9 +80,9 @@ public sealed interface SingleAyaFile extends GenericAyaFile {
   @VisibleForTesting default @NotNull Doc toDoc(
     @NotNull ImmutableSeq<Stmt> program,
     @NotNull ImmutableSeq<Problem> problems,
-    @NotNull PrettierOptions options
+    @NotNull LiterateData.InjectedFrontMatter frontMatter, @NotNull PrettierOptions options
   ) throws IOException {
-    return LiterateData.toDoc(this, null, program, problems, options);
+    return LiterateData.toDoc(this, null, program, problems, frontMatter, options);
   }
 
   private void doWrite(
@@ -99,13 +104,12 @@ public sealed interface SingleAyaFile extends GenericAyaFile {
   }
 
   private static @NotNull String nameOf(int i, AyaDocile item) {
-    return item instanceof Def def ? def.ref().name()
+    return item instanceof TyckDef def ? def.ref().name()
       : item instanceof Decl decl ? decl.ref().name() : String.valueOf(i);
   }
 
   /** Must be called after {@link #parseMe} */
-  default void resolveAdditional(@NotNull ResolveInfo info) {
-  }
+  default void resolveAdditional(@NotNull ResolveInfo info) { }
 
   @MustBeInvokedByOverriders
   default void tyckAdditional(@NotNull ResolveInfo info) {
@@ -145,12 +149,7 @@ public sealed interface SingleAyaFile extends GenericAyaFile {
       return SingleAyaFile.super.parseMe(parser);
     }
 
-    @Override public @NotNull SourceFile codeFile() {
-      return data.extractedAya();
-    }
-
-    @Override public @NotNull Literate literate() throws IOException {
-      return data.literate();
-    }
+    @Override public @NotNull SourceFile codeFile() { return data.extractedAya(); }
+    @Override public @NotNull Literate literate() { return data.literate(); }
   }
 }

@@ -1,0 +1,24 @@
+open import prelude hiding (++)
+
+open inductive Vec (n : Nat) (A : Type) elim n
+| 0 => []
+| suc n => infixr :> A (Vec n A)
+
+variable A B : Type
+variable n m o : Nat
+
+def vmap (f : A -> B) (xs : Vec n A) : Vec n B elim xs
+| [] => []
+| x :> xs' => f x :> vmap f xs'
+
+def head (Vec (suc n) A) : A
+| x :> _ => x
+
+def tail (Vec (suc n) A) : Vec n A
+| _ :> xs => xs
+
+overlap def infixr ++ (Vec n A) (Vec m A) : Vec (n + m) A
+| [], ys => ys
+| ys, [] => ys
+| x :> xs, ys => x :> xs ++ ys
+tighter :> =

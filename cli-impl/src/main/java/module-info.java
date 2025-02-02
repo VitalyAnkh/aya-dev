@@ -2,12 +2,12 @@ module aya.cli.impl {
   requires transitive aya.parser.ij;
   requires transitive aya.base;
 
-  requires static org.jetbrains.annotations;
-
-  requires aya.ij.parsing.core;
-  requires aya.ij.parsing.wrapper;
   requires com.google.gson;
-  requires org.commonmark;
+  requires aya.md;
+  requires aya.producer;
+  requires aya.compiler;
+  requires aya.jb.md;
+  requires org.jetbrains.annotations;
 
   exports org.aya.cli.interactive;
   exports org.aya.cli.library.incremental;
@@ -15,7 +15,6 @@ module aya.cli.impl {
   exports org.aya.cli.library.source;
   exports org.aya.cli.library;
   exports org.aya.cli.literate;
-  exports org.aya.cli.parse;
   exports org.aya.cli.render.vscode;
   exports org.aya.cli.render;
   exports org.aya.cli.single;

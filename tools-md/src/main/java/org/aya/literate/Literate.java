@@ -1,8 +1,9 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.literate;
 
 import kala.collection.immutable.ImmutableSeq;
+import kala.collection.mutable.MutableList;
 import org.aya.pretty.doc.*;
 import org.aya.util.error.SourcePos;
 import org.jetbrains.annotations.NotNull;
@@ -13,8 +14,10 @@ import org.jetbrains.annotations.Nullable;
  * @see LiterateConsumer
  */
 public interface Literate extends Docile {
-  record Raw(@NotNull Doc toDoc) implements Literate {
-  }
+  default @Nullable FrontMatter findFrontMatter() { return null; }
+
+  record Raw(@NotNull Doc toDoc) implements Literate { }
+  @NotNull Raw EOL = new Raw(Doc.line());
 
   record List(@NotNull ImmutableSeq<Literate> items, boolean ordered) implements Literate {
     @Override public @NotNull Doc toDoc() {
@@ -22,8 +25,10 @@ public interface Literate extends Docile {
     }
   }
 
-  record HyperLink(@NotNull String href, @Nullable String hover,
-                   @NotNull ImmutableSeq<Literate> children) implements Literate {
+  record HyperLink(
+    @NotNull String href, @Nullable String hover,
+    @NotNull ImmutableSeq<Literate> children
+  ) implements Literate {
     @Override public @NotNull Doc toDoc() {
       var child = Doc.cat(this.children().map(Literate::toDoc));
       return Doc.hyperLink(child, Link.page(href), hover);
@@ -49,6 +54,16 @@ public interface Literate extends Docile {
       var child = Doc.cat(this.children().map(Literate::toDoc));
       return style == null ? child : Doc.styled(style, child);
     }
+    @Override public @Nullable FrontMatter findFrontMatter() {
+      return children.view().filterIsInstance(FrontMatter.class).getFirstOrNull();
+    }
+  }
+
+  record FrontMatter(@NotNull MutableList<Literate> children) implements Literate {
+    @Override public @NotNull Doc toDoc() {
+      return Doc.cat(this.children().map(Literate::toDoc));
+    }
+    @Override public @NotNull FrontMatter findFrontMatter() { return this; }
   }
 
   class InlineCode implements Literate {
@@ -66,10 +81,7 @@ public interface Literate extends Docile {
       this.sourcePos = sourcePos;
     }
 
-    @Override
-    public @NotNull Doc toDoc() {
-      return Doc.code(code);
-    }
+    @Override public @NotNull Doc toDoc() { return Doc.code(code); }
   }
 
   class CodeBlock implements Literate {
@@ -83,6 +95,10 @@ public interface Literate extends Docile {
     public final @Nullable SourcePos sourcePos;
     public @Nullable Doc highlighted = null;
 
+    /**
+     * @param language  used as the `class` attribute of the code block
+     * @param sourcePos without '```\n' and '\n```'
+     */
     public CodeBlock(@NotNull String language, @NotNull String code, @Nullable SourcePos sourcePos) {
       this.language = language;
       this.code = code;
@@ -96,8 +112,7 @@ public interface Literate extends Docile {
   }
 
   record Unsupported(@NotNull ImmutableSeq<Literate> children) implements Literate {
-    @Override
-    public @NotNull Doc toDoc() {
+    @Override public @NotNull Doc toDoc() {
       return Doc.vcat(children.map(Literate::toDoc));
     }
   }

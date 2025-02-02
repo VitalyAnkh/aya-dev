@@ -1,0 +1,320 @@
+DidYouMeanDisamb:
+In file $FILE:2:30 ->
+
+  1 │   private open inductive Nat1 | zero
+  2 │   private open inductive Nat2 | zero
+    │                                 ╰──╯
+  3 │   def one => zero
+
+Warning: The name `zero` shadows a previous local definition from outer scope
+
+In file $FILE:2:8 ->
+
+  1 │   private open inductive Nat1 | zero
+  2 │   private open inductive Nat2 | zero
+    │           ╰──╯
+  3 │   def one => zero
+
+Warning: The name `zero` introduces ambiguity and can only be accessed through a
+         qualified name
+
+In file $FILE:3:11 ->
+
+  1 │   private open inductive Nat1 | zero
+  2 │   private open inductive Nat2 | zero
+  3 │   def one => zero
+    │              ╰──╯
+
+Error: The unqualified name `zero` is ambiguous
+       Did you mean:
+         `Nat1::zero`
+         `Nat2::zero`
+
+Resolving interrupted due to:
+1 error(s), 2 warning(s).
+Let's learn from that.
+
+ExportClashes:
+In file $FILE:2:22 ->
+
+  1 │   open inductive Nat1 | zero
+  2 │   open inductive Nat2 | zero
+    │                         ╰──╯
+
+Warning: The name `zero` shadows a previous local definition from outer scope
+
+In file $FILE:2:0 ->
+
+  1 │   open inductive Nat1 | zero
+  2 │   open inductive Nat2 | zero
+    │   ╰──╯
+
+Warning: The name `zero` introduces ambiguity and can only be accessed through a
+         qualified name
+
+In file $FILE:2:0 ->
+
+  1 │   open inductive Nat1 | zero
+  2 │   open inductive Nat2 | zero
+    │   ╰──╯
+
+Error: The name `zero` being exported clashes with another exported definition 
+       with the same name
+
+Resolving interrupted due to:
+1 error(s), 2 warning(s).
+Let's learn from that.
+
+DidYouMean:
+In file $FILE:2:11 ->
+
+  1 │   inductive Nat | zero | suc Nat
+  2 │   def one => suc zero
+    │              ╰─╯
+
+Error: The name `suc` is not defined in the current scope
+       Did you mean: `Nat::suc`
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+ImportDefineShadow:
+In file $FILE:4:4 ->
+
+  2 │   module A { def foo => true }
+  3 │   open A
+  4 │   def foo => false
+    │       ╰─╯
+
+Warning: The name `foo` introduces ambiguity and can only be accessed through a 
+         qualified name
+
+That looks right!
+
+ImportUsing:
+In file $FILE:4:14 ->
+
+  2 │   module A { def foo => true }
+  3 │   open A using (foo as bruh)
+  4 │   open A using (bar)
+    │                 ╰─╯
+
+Error: The qualified name `A::bar` is not defined in the current scope
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+ImportHiding:
+In file $FILE:4:15 ->
+
+  2 │   module A { def foo => true }
+  3 │   open A hiding (foo)
+  4 │   open A hiding (bar)
+    │                  ╰─╯
+
+Error: The qualified name `A::bar` is not defined in the current scope
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+ImportDefineShadow2:
+In file $FILE:4:5 ->
+
+  2 │   module A { def foo => true }
+  3 │   def foo => false
+  4 │   open A
+    │        ╰╯
+
+Warning: The name `foo` introduces ambiguity and can only be accessed through a 
+         qualified name
+
+That looks right!
+
+Issue247:
+In file $FILE:3:2 ->
+
+  1 │   inductive Z : Type
+  2 │   | zero
+  3 │   | zero
+    │     ╰──╯
+
+Error: The name zero (`zero`) is already defined elsewhere
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+RedefPrim:
+In file $FILE:1:12 ->
+
+  1 │   prim I prim I
+    │               ╰╯
+
+Error: Redefinition of primitive `I`
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+PrimDeps:
+In file $FILE:1:5 ->
+
+  1 │   prim Path
+    │        ╰──╯
+
+Error: The primitive `Path` depends on undeclared primitive(s): `I`
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+UnknownPrim:
+In file $FILE:1:5 ->
+
+  1 │   prim senpaiSuki
+    │        ╰────────╯
+
+Error: Unknown primitive `senpaiSuki`
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+UnknownVar:
+In file $FILE:2:9 ->
+
+  1 │   open inductive Nat : Type | zero
+  2 │   def p => Nat::suc Nat::zero
+    │            ╰──────╯
+
+Error: The qualified name `Nat::suc` is not defined in the current scope
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+LetOpen:
+That looks right!
+
+UnknownElimVar:
+In file $FILE:3:29 ->
+
+  1 │   open import arith::bool::base
+  2 │   def b => true
+  3 │   def p (a : Bool) : Bool elim b
+    │                                ╰╯
+
+Error: The name `b` is not defined in the current scope
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+GeneralizedDisallowed:
+In file $FILE:3:7 ->
+
+  1 │   variable A : Type
+  2 │   def test Type : Type
+  3 │   | _ => A
+    │          ╰╯
+
+Error: The generalized variable `A` is not available here
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+DuplicateModName:
+In file $FILE:2:7 ->
+
+  1 │   module A {}
+  2 │   module A {}
+    │          ╰╯
+
+Error: The module name `A` is already defined elsewhere
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+ImportNoneExistMod:
+In file $FILE:1:7 ->
+
+  1 │   import hopefullyThisModuleWillNeverExist
+    │          ╰───────────────────────────────╯
+
+Error: The module name `hopefullyThisModuleWillNeverExist` is not found
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+OpenNoneExistMod:
+In file $FILE:1:5 ->
+
+  1 │   open hopefullyThisModuleWillNeverExist
+    │        ╰───────────────────────────────╯
+
+Error: The module name `hopefullyThisModuleWillNeverExist` is not defined in the
+       current scope
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+DuplicateExport:
+In file $FILE:4:12 ->
+
+  2 │   module B { def t => Type }
+  3 │   public open A
+  4 │   public open B
+    │               ╰╯
+
+Warning: The name `t` introduces ambiguity and can only be accessed through a 
+         qualified name
+
+In file $FILE:4:12 ->
+
+  2 │   module B { def t => Type }
+  3 │   public open A
+  4 │   public open B
+    │               ╰╯
+
+Error: The name `t` being exported clashes with another exported definition with
+       the same name
+
+Resolving interrupted due to:
+1 error(s), 1 warning(s).
+Let's learn from that.
+
+UnknownProjMem:
+In file $FILE:2:24 ->
+
+  1 │   open class Cls | A : Type
+  2 │   def test (c : Cls) => c.B
+    │                           ╰╯
+
+Error: Unknown member `B` projected
+
+Resolving interrupted due to:
+1 error(s), 0 warning(s).
+Let's learn from that.
+
+LocalShadow:
+In file $FILE:3:8 ->
+
+  1 │   def test (A : Type) (a : A) : A =>
+  2 │     let | x : A := a
+  3 │         | x : A := a
+    │           ╰╯
+
+Warning: The name `x` shadows a previous local definition from outer scope
+
+That looks right!
+
+LocalShadowSuppress:
+That looks right!
+

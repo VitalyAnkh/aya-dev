@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.parser;
 
@@ -48,17 +48,19 @@ public class AyaParserDefinitionBase extends ParserDefBase.WithFile {
   /** text keywords */
   public static final @NotNull TokenSet KEYWORDS = TokenSet.create(
     AyaPsiElementTypes.KW_AS,
+    AyaPsiElementTypes.KW_CLASS,
+    AyaPsiElementTypes.KW_CLASSIFIYING,
     AyaPsiElementTypes.KW_CODATA,
     AyaPsiElementTypes.KW_COERCE,
     AyaPsiElementTypes.KW_COMPLETED,
-    AyaPsiElementTypes.KW_COUNTEREXAMPLE,
     AyaPsiElementTypes.KW_DATA,
     AyaPsiElementTypes.KW_DEF,
     AyaPsiElementTypes.KW_DO,
-    AyaPsiElementTypes.KW_SELF,
-    AyaPsiElementTypes.KW_OVERRIDE,
+    AyaPsiElementTypes.KW_ELIM,
     AyaPsiElementTypes.KW_EXAMPLE,
     AyaPsiElementTypes.KW_EXTENDS,
+    AyaPsiElementTypes.KW_FIXL,
+    AyaPsiElementTypes.KW_FIXR,
     AyaPsiElementTypes.KW_FORALL,
     AyaPsiElementTypes.KW_HIDING,
     AyaPsiElementTypes.KW_IMPORT,
@@ -66,9 +68,8 @@ public class AyaParserDefinitionBase extends ParserDefBase.WithFile {
     AyaPsiElementTypes.KW_INFIX,
     AyaPsiElementTypes.KW_INFIXL,
     AyaPsiElementTypes.KW_INFIXR,
-    AyaPsiElementTypes.KW_FIXL,
-    AyaPsiElementTypes.KW_FIXR,
     AyaPsiElementTypes.KW_INLINE,
+    AyaPsiElementTypes.KW_ISET,
     AyaPsiElementTypes.KW_LAMBDA,
     AyaPsiElementTypes.KW_LET,
     AyaPsiElementTypes.KW_LOOSER,
@@ -78,18 +79,19 @@ public class AyaParserDefinitionBase extends ParserDefBase.WithFile {
     AyaPsiElementTypes.KW_OPAQUE,
     AyaPsiElementTypes.KW_OPEN,
     AyaPsiElementTypes.KW_OVERLAP,
+    AyaPsiElementTypes.KW_OVERRIDE,
+    AyaPsiElementTypes.KW_PARTIAL,
     AyaPsiElementTypes.KW_PI,
     AyaPsiElementTypes.KW_PRIM,
     AyaPsiElementTypes.KW_PRIVATE,
+    AyaPsiElementTypes.KW_PROP,
     AyaPsiElementTypes.KW_PUBLIC,
+    AyaPsiElementTypes.KW_RETURNS,
+    AyaPsiElementTypes.KW_SELF,
+    AyaPsiElementTypes.KW_SET,
     AyaPsiElementTypes.KW_SIGMA,
-    AyaPsiElementTypes.KW_CLASS,
-    AyaPsiElementTypes.KW_CLASSIFIYING,
     AyaPsiElementTypes.KW_TIGHTER,
     AyaPsiElementTypes.KW_TYPE,
-    AyaPsiElementTypes.KW_PROP,
-    AyaPsiElementTypes.KW_SET,
-    AyaPsiElementTypes.KW_ISET,
     AyaPsiElementTypes.KW_ULIFT,
     AyaPsiElementTypes.KW_USING,
     AyaPsiElementTypes.KW_VARIABLE
@@ -105,11 +107,7 @@ public class AyaParserDefinitionBase extends ParserDefBase.WithFile {
     AyaPsiElementTypes.LARROW,
     AyaPsiElementTypes.IMPLIES,
     AyaPsiElementTypes.LIDIOM,
-    AyaPsiElementTypes.RIDIOM,
-    AyaPsiElementTypes.LPARTIAL,
-    AyaPsiElementTypes.RPARTIAL,
-    AyaPsiElementTypes.LPATH,
-    AyaPsiElementTypes.RPATH
+    AyaPsiElementTypes.RIDIOM
   );
 
   public static final @NotNull TokenSet DELIMITERS = TokenSet.create(

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2025 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 
 // This is a generated file. Not intended for manual editing.
@@ -22,10 +22,8 @@ public interface AyaPsiElementTypes {
   IElementType ATOM_LIST_PATTERN = new AyaPsiElementType("ATOM_LIST_PATTERN");
   IElementType ATOM_PATTERN = new AyaPsiElementType("ATOM_PATTERN");
   IElementType BARE_CLAUSE = new AyaPsiElementType("BARE_CLAUSE");
-  IElementType BARE_SUB_SYSTEM = new AyaPsiElementType("BARE_SUB_SYSTEM");
   IElementType BARRED = new AyaPsiElementType("BARRED");
   IElementType BARRED_CLAUSE = new AyaPsiElementType("BARRED_CLAUSE");
-  IElementType BARRED_SUB_SYSTEM = new AyaPsiElementType("BARRED_SUB_SYSTEM");
   IElementType BIND_BLOCK = new AyaPsiElementType("BIND_BLOCK");
   IElementType CALM_FACE_EXPR = new AyaPsiElementType("CALM_FACE_EXPR");
   IElementType CLASS_DECL = new AyaPsiElementType("CLASS_DECL");
@@ -34,15 +32,17 @@ public interface AyaPsiElementTypes {
   IElementType CLAUSES = new AyaPsiElementType("CLAUSES");
   IElementType COMMA_SEP = new AyaPsiElementType("COMMA_SEP");
   IElementType DATA_BODY = new AyaPsiElementType("DATA_BODY");
-  IElementType DATA_CTOR = new AyaPsiElementType("DATA_CTOR");
-  IElementType DATA_CTOR_CLAUSE = new AyaPsiElementType("DATA_CTOR_CLAUSE");
+  IElementType DATA_CON = new AyaPsiElementType("DATA_CON");
+  IElementType DATA_CON_CLAUSE = new AyaPsiElementType("DATA_CON_CLAUSE");
   IElementType DATA_DECL = new AyaPsiElementType("DATA_DECL");
   IElementType DECL = new AyaPsiElementType("DECL");
-  IElementType DECL_MODIFIERS = new AyaPsiElementType("DECL_MODIFIERS");
+  IElementType DECL_MODIFIER = new AyaPsiElementType("DECL_MODIFIER");
   IElementType DECL_NAME_OR_INFIX = new AyaPsiElementType("DECL_NAME_OR_INFIX");
   IElementType DO_BINDING = new AyaPsiElementType("DO_BINDING");
   IElementType DO_BLOCK_CONTENT = new AyaPsiElementType("DO_BLOCK_CONTENT");
   IElementType DO_EXPR = new AyaPsiElementType("DO_EXPR");
+  IElementType ELIMS = new AyaPsiElementType("ELIMS");
+  IElementType ELIM_DATA_BODY = new AyaPsiElementType("ELIM_DATA_BODY");
   IElementType EXPR = new AyaPsiElementType("EXPR");
   IElementType FN_BODY = new AyaPsiElementType("FN_BODY");
   IElementType FN_DECL = new AyaPsiElementType("FN_DECL");
@@ -55,7 +55,9 @@ public interface AyaPsiElementTypes {
   IElementType IDIOM_ATOM = new AyaPsiElementType("IDIOM_ATOM");
   IElementType IDIOM_BLOCK = new AyaPsiElementType("IDIOM_BLOCK");
   IElementType IMPORT_CMD = new AyaPsiElementType("IMPORT_CMD");
-  IElementType LAMBDA_EXPR = new AyaPsiElementType("LAMBDA_EXPR");
+  IElementType LAMBDA_0_EXPR = new AyaPsiElementType("LAMBDA_0_EXPR");
+  IElementType LAMBDA_1_EXPR = new AyaPsiElementType("LAMBDA_1_EXPR");
+  IElementType LAMBDA_2_EXPR = new AyaPsiElementType("LAMBDA_2_EXPR");
   IElementType LAMBDA_TELE = new AyaPsiElementType("LAMBDA_TELE");
   IElementType LAMBDA_TELE_BINDER = new AyaPsiElementType("LAMBDA_TELE_BINDER");
   IElementType LET_BIND = new AyaPsiElementType("LET_BIND");
@@ -67,21 +69,16 @@ public interface AyaPsiElementTypes {
   IElementType LIT_STRING_EXPR = new AyaPsiElementType("LIT_STRING_EXPR");
   IElementType LOOSERS = new AyaPsiElementType("LOOSERS");
   IElementType MATCH_EXPR = new AyaPsiElementType("MATCH_EXPR");
+  IElementType MATCH_TYPE = new AyaPsiElementType("MATCH_TYPE");
+  IElementType MEMBER_MODIFIER = new AyaPsiElementType("MEMBER_MODIFIER");
   IElementType MODULE = new AyaPsiElementType("MODULE");
   IElementType NAMED_IM_ARGUMENT = new AyaPsiElementType("NAMED_IM_ARGUMENT");
-  IElementType NEW_ARG = new AyaPsiElementType("NEW_ARG");
-  IElementType NEW_ARG_FIELD = new AyaPsiElementType("NEW_ARG_FIELD");
-  IElementType NEW_BODY = new AyaPsiElementType("NEW_BODY");
   IElementType NEW_EXPR = new AyaPsiElementType("NEW_EXPR");
   IElementType OPEN_CMD = new AyaPsiElementType("OPEN_CMD");
-  IElementType OPEN_KW = new AyaPsiElementType("OPEN_KW");
-  IElementType PARTIAL_ATOM = new AyaPsiElementType("PARTIAL_ATOM");
-  IElementType PARTIAL_BLOCK = new AyaPsiElementType("PARTIAL_BLOCK");
-  IElementType PATH_EXPR = new AyaPsiElementType("PATH_EXPR");
-  IElementType PATH_TELE = new AyaPsiElementType("PATH_TELE");
   IElementType PATTERN = new AyaPsiElementType("PATTERN");
   IElementType PATTERNS = new AyaPsiElementType("PATTERNS");
   IElementType PI_EXPR = new AyaPsiElementType("PI_EXPR");
+  IElementType PRAGMA = new AyaPsiElementType("PRAGMA");
   IElementType PRIM_DECL = new AyaPsiElementType("PRIM_DECL");
   IElementType PRIM_NAME = new AyaPsiElementType("PRIM_NAME");
   IElementType PROJ_EXPR = new AyaPsiElementType("PROJ_EXPR");
@@ -92,7 +89,6 @@ public interface AyaPsiElementTypes {
   IElementType SELF_EXPR = new AyaPsiElementType("SELF_EXPR");
   IElementType SIGMA_EXPR = new AyaPsiElementType("SIGMA_EXPR");
   IElementType STMT = new AyaPsiElementType("STMT");
-  IElementType SUB_SYSTEM = new AyaPsiElementType("SUB_SYSTEM");
   IElementType TELE = new AyaPsiElementType("TELE");
   IElementType TELE_BINDER = new AyaPsiElementType("TELE_BINDER");
   IElementType TELE_BINDER_ANONYMOUS = new AyaPsiElementType("TELE_BINDER_ANONYMOUS");
@@ -128,13 +124,13 @@ public interface AyaPsiElementTypes {
   IElementType KW_AS = new AyaPsiTokenType("as");
   IElementType KW_CLASS = new AyaPsiTokenType("class");
   IElementType KW_CLASSIFIYING = new AyaPsiTokenType("classifying");
-  IElementType KW_CODATA = new AyaPsiTokenType("codata");
+  IElementType KW_CODATA = new AyaPsiTokenType("coinductive");
   IElementType KW_COERCE = new AyaPsiTokenType("coerce");
   IElementType KW_COMPLETED = new AyaPsiTokenType("completed");
-  IElementType KW_COUNTEREXAMPLE = new AyaPsiTokenType("counterexample");
-  IElementType KW_DATA = new AyaPsiTokenType("data");
+  IElementType KW_DATA = new AyaPsiTokenType("inductive");
   IElementType KW_DEF = new AyaPsiTokenType("def");
   IElementType KW_DO = new AyaPsiTokenType("do");
+  IElementType KW_ELIM = new AyaPsiTokenType("elim");
   IElementType KW_EXAMPLE = new AyaPsiTokenType("example");
   IElementType KW_EXTENDS = new AyaPsiTokenType("extends");
   IElementType KW_FIXL = new AyaPsiTokenType("fixl");
@@ -158,11 +154,13 @@ public interface AyaPsiElementTypes {
   IElementType KW_OPEN = new AyaPsiTokenType("open");
   IElementType KW_OVERLAP = new AyaPsiTokenType("overlap");
   IElementType KW_OVERRIDE = new AyaPsiTokenType("override");
+  IElementType KW_PARTIAL = new AyaPsiTokenType("partial");
   IElementType KW_PI = new AyaPsiTokenType("Fn");
   IElementType KW_PRIM = new AyaPsiTokenType("prim");
   IElementType KW_PRIVATE = new AyaPsiTokenType("private");
   IElementType KW_PROP = new AyaPsiTokenType("Prop");
   IElementType KW_PUBLIC = new AyaPsiTokenType("public");
+  IElementType KW_RETURNS = new AyaPsiTokenType("returns");
   IElementType KW_SELF = new AyaPsiTokenType("self");
   IElementType KW_SET = new AyaPsiTokenType("Set");
   IElementType KW_SIGMA = new AyaPsiTokenType("Sig");
@@ -177,8 +175,6 @@ public interface AyaPsiElementTypes {
   IElementType LGOAL = new AyaPsiTokenType("{?");
   IElementType LIDIOM = new AyaPsiTokenType("(|");
   IElementType LPAREN = new AyaPsiTokenType("(");
-  IElementType LPARTIAL = new AyaPsiTokenType("{|");
-  IElementType LPATH = new AyaPsiTokenType("[|");
   IElementType NUMBER = new AyaPsiTokenType("NUMBER");
   IElementType RARRAY = new AyaPsiTokenType("]");
   IElementType RBRACE = new AyaPsiTokenType("}");
@@ -186,8 +182,6 @@ public interface AyaPsiElementTypes {
   IElementType RGOAL = new AyaPsiTokenType("?}");
   IElementType RIDIOM = new AyaPsiTokenType("|)");
   IElementType RPAREN = new AyaPsiTokenType(")");
-  IElementType RPARTIAL = new AyaPsiTokenType("|}");
-  IElementType RPATH = new AyaPsiTokenType("|]");
   IElementType STRING = new AyaPsiTokenType("STRING");
   IElementType SUCHTHAT = new AyaPsiTokenType("**");
   IElementType TO = new AyaPsiTokenType("->");

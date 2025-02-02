@@ -1,0 +1,1 @@
+open inductive Nat | zero | suc Nat

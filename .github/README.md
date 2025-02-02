@@ -1,6 +1,5 @@
 [![actions]](https://github.com/aya-prover/aya-dev/actions/workflows/gradle-check.yaml)
 [![maven]][maven-repo]
-[![gitter]](https://gitter.im/aya-prover/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![codecov]](https://codecov.io/gh/aya-prover/aya-dev)
 
 [**Website**](https://www.aya-prover.org) contains:
@@ -8,57 +7,59 @@
 + Development blogs which are written for general audience
 + [Installation](https://www.aya-prover.org/guide/install.html)
   instructions (basically telling you what to download in [GitHub Releases])
-+ [Tutorial for Haskellers](https://www.aya-prover.org/guide/haskeller-tutorial.html)
-+ [Tutorial of extension types](https://www.aya-prover.org/guide/ext-types.html)
++ [Tutorial for functional programming features](https://www.aya-prover.org/guide/haskeller-tutorial.html)
++ [Tutorial for theorem proving features](https://www.aya-prover.org/guide/prover-tutorial.html)
 
-Aya is under active development, so please expect bugs, usability or performance issues
-(please file issues or create threads in discussions!).
+> [!WARNING]
+>
+> Aya is under active development, so don't be surprised about bugs, usability or performance issues
+> (please file issues or create threads in discussions!), but we have the goal to make it as
+> user-friendly as we can feasibly do.
 
 ## What to expect?
 
-+ Dependent types, including pi-types, sigma types, indexed families, etc.
-  You could write a [type-safe interpreter][gadt].
-+ Cartesian cubical type theory with generalized path types
-  similar to a "bounded" cubical subtype.
-  + Implementation prototype of De Morgan cubical: [Guest0x0].
-  + Demonstration of higher inductive types: [3-torus] (three-dimensional torus!!).
-  + Demonstration of [higher-inductive-inductive-recursive types][hiir].
++ Dependent types, including Π-types, Σ-types, indexed families, etc.
+  You could write a [sized-vector type][gadt].
++ Set-level cubical type theory (XTT).
+  + Demonstration of [quotient-inductive-inductive types][hiir],
+    no forward declaration or mutual block needed!
+    We infer the type checking order by how definitions use each other.
+  + Proof of `funExt` in [paths.aya][funExt].
 + Pattern matching with first-match semantics.
   Checkout the [red-black tree][rbtree] (without deletion yet).
++ A JIT-compiler that translates Aya code to higher-order abstract syntax in Java.
+  This makes the interpreter to run tree-sort 10x faster! See [benchmark code][tbtree-bench].
 + Overlapping and order-independent patterns. Very [useful][oop] in theorem proving.
 + A literate programming mode with inline code fragment support, inspired from Agda and [1lab].
   You may preview the features (in Chinese)
-  [here](https://blog.imkiva.org/posts/intro-literate-aya.html).
+  [here](https://blog.kiva.moe/posts/intro-literate-aya.html).
 + Binary operators, with precedence specified by a partial ordering
-  (instead of a number like in Haskell or Agda)
-  which is useful for [equation reasoning][assoc].
+  (instead of a number like in Haskell or Agda).
 + A fairly good termination checker.
-  We adapted some code from Agda's implementation to accept
-  [more definitions][foetus] (which are rejected by, e.g. Arend).
-+ Inference of type checking order. That is to say,
-  no syntax for forward-declarations is needed for [mutual recursions][mutual],
-  induction-recursion, or induction-induction.
-+ See also stdlib candidates [style guide][stdlib-style]. We have a grand plan!
+  We adapted some code from Agda's implementation to accept more definitions such as the
+  `testSwapAdd` example in [this file][foetus] (which are rejected by, e.g. Arend).
 
 See also [use as a library](#use-as-a-library).
 
 [GitHub Releases]: https://github.com/aya-prover/aya-dev/releases/tag/nightly-build
-[Java 21]: https://jdk.java.net/21
+[Java 22]: https://jdk.java.net/22
 [1lab]: https://1lab.dev
 
 ## Contributing to Aya
 
-Since you need [Java 21] to set this project up, in case your choice
-of IDE is IntelliJ IDEA, version 2023.3 or higher is required.
+> [!IMPORTANT]
+>
+> Since you need [Java 22] to set this project up, in case your choice
+> of IDE is IntelliJ IDEA, version 2024.2 or higher is required.
 
 + Questions or concerns are welcomed in the discussion area.
   We will try our best to answer your questions, but please be nice.
 + We welcome nitpicks on error reporting! Please let us know anything not perfect.
   We have already implemented several user-suggested error messages.
 + Before contributing in any form, please read
-  [the contribution guideline](https://github.com/aya-prover/aya-dev/blob/master/.github/CONTRIBUTING.md) thoroughly
+  [the contribution guideline](CONTRIBUTING.md) thoroughly
   and make sure you understand your responsibilities.
-+ Please follow [the Code of Conduct](https://github.com/aya-prover/aya-dev/blob/master/.github/CODE_OF_CONDUCT.md) to
++ Please follow [the Code of Conduct](CODE_OF_CONDUCT.md) to
   ensure an inclusive and welcoming community atmosphere.
 + Ask [@ice1000] or simply create a ticket in the discussion to become an organization member.
   + If you want to contribute, ask before doing anything.
@@ -68,21 +69,16 @@ of IDE is IntelliJ IDEA, version 2023.3 or higher is required.
 [@ice1000]: https://github.com/ice1000
 [actions]: https://github.com/aya-prover/aya-dev/actions/workflows/gradle-check.yaml/badge.svg
 [codecov]: https://img.shields.io/codecov/c/github/aya-prover/aya-dev?logo=codecov&logoColor=white
-[gitter]: https://img.shields.io/gitter/room/aya-prover/community?color=cyan&logo=gitter
 [maven]: https://img.shields.io/maven-central/v/org.aya-prover/base?logo=gradle
-[oop]: ../base/src/test/resources/success/common/src/Arith/Nat/Core.aya
-[gadt]: ../base/src/test/resources/success/src/TypeSafeNorm.aya
-[regularity]: ../base/src/test/resources/success/common/src/Paths.aya
-[funExt]: ../base/src/test/resources/success/common/src/Paths.aya
-[rbtree]: ../base/src/test/resources/success/common/src/Data/Tree/RedBlack/Direct.aya
-[3-torus]: ../base/src/test/resources/success/common/src/Spaces/Torus/T3.aya
-[hiir]: ../base/src/test/resources/success/common/src/TypeTheory/Thorsten.aya
-[assoc]: ../base/src/test/resources/success/src/Assoc.aya
-[foetus]: ../base/src/test/resources/success/src/FoetusLimitation.aya
-[mutual]: ../base/src/test/resources/success/src/Order.aya
+[oop]: ../cli-impl/src/test/resources/shared/src/arith/nat/base.aya
+[gadt]: ../cli-impl/src/test/resources/shared/src/data/vec/base.aya
+[regularity]: ../cli-impl/src/test/resources/shared/src/paths.aya
+[funExt]: ../cli-impl/src/test/resources/shared/src/paths.aya
+[rbtree]: ../jit-compiler/src/test/resources/TreeSort.aya
+[tbtree-bench]: ../jit-compiler/src/test/java/RedBlackTreeTest.java
+[hiir]: https://www.aya-prover.org/blog/tt-in-tt-qiit.html
+[foetus]: ../cli-impl/src/test/java/org/aya/test/fixtures/TerckError.java
 [maven-repo]: https://repo1.maven.org/maven2/org/aya-prover
-[Guest0x0]: https://github.com/ice1000/Guest0x0
-[stdlib-style]: ../base/src/test/resources/success/common
 
 ## Use as a library
 
@@ -105,7 +101,11 @@ implementation group: 'org.aya-prover', name: '[project name]', version: '[lates
 
 + `[project name]` specifies the subproject of Aya you want to use,
   and the options are `pretty`, `base`, `cli-impl`, `parser`, etc.
-  + The type checker lives in `base` and `parser`.
+  + The syntax definitions live in `syntax`.
+  + The parser lives in `parser` (the generated parsing code) and `producer`
+    (transformer from parse tree to concrete syntax tree).
+  + The type checker lives in `base`.
+  + The JIT compiler lives in `jit-compiler`.
   + The generalized pretty printing framework is in `pretty`.
   + The library system, literate mode, single-file type checker, and basic REPL are in `cli-impl`.
   + The generalized tree builder, generalized termination checker,
@@ -115,5 +115,7 @@ implementation group: 'org.aya-prover', name: '[project name]', version: '[lates
   + The command and argument parsing framework is in `tools-repl`.
     It offers an implementation of jline3 parser based on Grammar-Kit and relevant facilities.
   + The literate-markdown related infrastructure is in `tools-md`.
-    It offers commonmark extensions for literate mode of any language with a highlighter.
+    It offers [JetBrains/markdown] extensions for literate mode of any language with a highlighter.
 + `[latest version]` is what you see on this badge ![maven].
+
+[JetBrains/markdown]: https://github.com/JetBrains/markdown

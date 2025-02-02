@@ -2,32 +2,31 @@
 # The Version of this project, aka, The Aya Theorem Prover.
 # Remove "-SNAPSHOT" suffix and run gradle publish to release a new version.
 # After that, increase the version number and add "-SNAPSHOT" suffix back for next cycle.
-project = "0.30.0-SNAPSHOT"
+project = "0.38.0-SNAPSHOT"
 
 # https://openjdk.org/
-java = "21"
-
+java = "22"
 # https://github.com/JetBrains/java-annotations
-annotations = "24.1.0"
-kala = "0.69.0"
-picocli = "4.7.5"
-build-util = "0.0.21"
-# https://github.com/graalvm/native-build-tools
-graal-tools = "0.9.28"
+annotations = "26.0.1"
+# https://github.com/Glavo/kala-common
+kala = "0.78.0"
+# https://picocli.info
+picocli = "4.7.6"
+# https://repo1.maven.org/maven2/org/aya-prover/upstream/build-util
+aya-upstream = "0.0.33"
 # https://github.com/jline/jline3
-jline = "3.25.0"
-# https://github.com/commonmark/commonmark-java
-commonmark = "0.21.1"
-jimgui = "v0.21.0"
-junit = "5.10.0"
+jline = "3.28.0"
+# https://junit.org/junit5
+junit = "5.11.3"
 hamcrest = "2.2"
 # https://github.com/google/gson
-gson = "2.10.1"
-guest0x0 = "0.18.0"
+gson = "2.11.0"
 # https://github.com/beryx/badass-jlink-plugin
-jlink = "3.0.1"
+jlink = "3.1.1"
 # https://github.com/jacoco/jacoco
-jacoco = "0.8.11"
+jacoco = "0.8.12"
+# https://github.com/manifold-systems/manifold/tree/master/manifold-deps-parent/manifold-delegation
+manifold = "2024.1.43"
 
 [plugins]
 jlink = { id = "org.beryx.jlink", version.ref = "jlink" }
@@ -35,14 +34,13 @@ jlink = { id = "org.beryx.jlink", version.ref = "jlink" }
 [libraries]
 annotations = { group = "org.jetbrains", name = "annotations", version.ref = "annotations" }
 
-aya-ij-core = { group = "org.aya-prover.upstream", name = "ij-parsing-core", version.ref = "build-util" }
-aya-ij-text = { group = "org.aya-prover.upstream", name = "ij-util-text", version.ref = "build-util" }
-aya-ij-wrapper = { group = "org.aya-prover.upstream", name = "ij-parsing-wrapper", version.ref = "build-util" }
-aya-commonmark = { group = "org.aya-prover", name = "commonmark", version.ref = "commonmark" }
-aya-lsp-protocol = { group = "org.aya-prover.upstream", name = "javacs-protocol", version.ref = "build-util" }
-aya-build-util = { group = "org.aya-prover.upstream", name = "build-util", version.ref = "build-util" }
-aya-build-jflex = { group = "org.aya-prover.upstream", name = "build-util-jflex", version.ref = "build-util" }
-aya-guest0x0 = { group = "org.aya-prover.guest0x0", name = "cubical", version.ref = "guest0x0" }
+aya-ij-core = { group = "org.aya-prover.upstream", name = "ij-parsing-core", version.ref = "aya-upstream" }
+aya-ij-text = { group = "org.aya-prover.upstream", name = "ij-util-text", version.ref = "aya-upstream" }
+aya-ij-wrapper = { group = "org.aya-prover.upstream", name = "ij-parsing-wrapper", version.ref = "aya-upstream" }
+aya-lsp-protocol = { group = "org.aya-prover.upstream", name = "javacs-protocol", version.ref = "aya-upstream" }
+aya-build-util = { group = "org.aya-prover.upstream", name = "build-util", version.ref = "aya-upstream" }
+aya-build-jflex = { group = "org.aya-prover.upstream", name = "build-util-jflex", version.ref = "aya-upstream" }
+aya-jbmd-ext = { group = "org.aya-prover.upstream", name = "jb-md-ij", version.ref = "aya-upstream" }
 
 kala-base = { group = "org.glavo.kala", name = "kala-base", version.ref = "kala" }
 kala-collection = { group = "org.glavo.kala", name = "kala-collection", version.ref = "kala" }
@@ -51,9 +49,7 @@ kala-common = { group = "org.glavo.kala", name = "kala-common", version.ref = "k
 picocli-runtime = { group = "info.picocli", name = "picocli", version.ref = "picocli" }
 picocli-codegen = { group = "info.picocli", name = "picocli-codegen", version.ref = "picocli" }
 
-graal-nitools = { group = "org.graalvm.buildtools.native", name = "org.graalvm.buildtools.native.gradle.plugin", version.ref = "graal-tools" }
-
-jline-terminal-jansi = { group = "org.jline", name = "jline-terminal-jansi", version.ref = "jline" }
+jline-terminal-native = { group = "org.jline", name = "jline-terminal-jni", version.ref = "jline" }
 jline-terminal-api = { group = "org.jline", name = "jline-terminal", version.ref = "jline" }
 jline-builtins = { group = "org.jline", name = "jline-builtins", version.ref = "jline" }
 jline-reader = { group = "org.jline", name = "jline-reader", version.ref = "jline" }
@@ -62,5 +58,7 @@ junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.r
 junit-params = { group = "org.junit.jupiter", name = "junit-jupiter-params", version.ref = "junit" }
 hamcrest = { group = "org.hamcrest", name = "hamcrest", version.ref = "hamcrest" }
 
-jimgui-core = { group = "org.ice1000.jimgui", name = "core", version.ref = "jimgui" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+
+manifold-delegate-runtime = { group = "systems.manifold", name = "manifold-delegation-rt", version.ref = "manifold" }
+manifold-delegate-codegen = { group = "systems.manifold", name = "manifold-delegation", version.ref = "manifold" }

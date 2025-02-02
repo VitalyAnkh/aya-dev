@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.lsp.server;
 
@@ -25,14 +25,13 @@ import org.aya.cli.render.RenderOptions;
 import org.aya.cli.single.CompilerFlags;
 import org.aya.cli.utils.InlineHintProblem;
 import org.aya.generic.Constants;
-import org.aya.generic.util.AyaFiles;
 import org.aya.ide.LspPrimFactory;
 import org.aya.ide.action.*;
 import org.aya.lsp.actions.LensMaker;
 import org.aya.lsp.actions.SemanticHighlight;
 import org.aya.lsp.actions.SymbolMaker;
 import org.aya.lsp.library.WsLibrary;
-import org.aya.lsp.models.ComputeTermResult;
+import org.aya.lsp.models.ComputeTypeResult;
 import org.aya.lsp.models.HighlightResult;
 import org.aya.lsp.models.ServerOptions;
 import org.aya.lsp.models.ServerRenderOptions;
@@ -41,6 +40,7 @@ import org.aya.lsp.utils.LspRange;
 import org.aya.prettier.AyaPrettierOptions;
 import org.aya.pretty.doc.Doc;
 import org.aya.pretty.printer.PrinterConfig;
+import org.aya.syntax.AyaFiles;
 import org.aya.util.FileUtil;
 import org.aya.util.prettier.PrettierOptions;
 import org.aya.util.reporter.BufferReporter;
@@ -92,19 +92,25 @@ public class AyaLanguageServer implements LanguageServer {
     return libraries.view();
   }
 
-  public void registerLibrary(@NotNull Path path) {
+  /// @return the libraries that are actually loaded
+  public SeqView<LibraryOwner> registerLibrary(@NotNull Path path) {
     Log.i("Adding library path %s", path);
-    if (!tryAyaLibrary(path)) mockLibraries(path);
+    var tryLoad = tryAyaLibrary(path);
+    if (tryLoad != null) return tryLoad;
+    return SeqView.narrow(mockLibraries(path).view());
   }
 
-  private boolean tryAyaLibrary(@Nullable Path path) {
-    if (path == null) return false;
+  /// @return null if the path needs to be "mocked", empty if the library fails to load (due to IO exceptions
+  /// or possibly malformed config files), and nonempty if successfully loaded.
+  private @Nullable SeqView<LibraryOwner> tryAyaLibrary(@Nullable Path path) {
+    if (path == null) return null;
     var ayaJson = path.resolve(Constants.AYA_JSON);
     if (!Files.exists(ayaJson)) return tryAyaLibrary(path.getParent());
     try {
       var config = LibraryConfigData.fromLibraryRoot(path);
       var owner = DiskLibraryOwner.from(config);
       libraries.append(owner);
+      return SeqView.of(owner);
     } catch (IOException e) {
       var s = new StringWriter();
       e.printStackTrace(new PrintWriter(s));
@@ -112,18 +118,19 @@ public class AyaLanguageServer implements LanguageServer {
     } catch (LibraryConfigData.BadConfig bad) {
       client.showMessage(new ShowMessageParams(MessageType.Error, "Cannot load malformed library: " + bad.getMessage()));
     }
-    // stop retrying and mocking
-    return true;
+    // Do not mock because there is meant to be a library, but it's bad
+    return SeqView.empty();
   }
 
-  private void mockLibraries(@NotNull Path path) {
-    libraries.appendAll(AyaFiles.collectAyaSourceFiles(path, 1)
-      .map(WsLibrary::mock));
+  private ImmutableSeq<WsLibrary> mockLibraries(@NotNull Path path) {
+    var mocked = AyaFiles.collectAyaSourceFiles(path, 1).map(WsLibrary::mock);
+    libraries.appendAll(mocked);
+    return mocked;
   }
 
   @Override public void initialized() {
     // Imitate the javacs lsp
-    // client.registerCapability("workspace/didChangeWatchedFiles");
+    // client.registerCapability(new RegistrationParams("workspace/didChangeWatchedFiles", null));
   }
 
   @Override public List<TextEdit> willSaveWaitUntilTextDocument(WillSaveTextDocumentParams params) {
@@ -132,11 +139,12 @@ public class AyaLanguageServer implements LanguageServer {
 
   @Override public InitializeResult initialize(InitializeParams params) {
     var cap = new ServerCapabilities();
-    cap.textDocumentSync = 0;
+    cap.textDocumentSync = DocumentSyncKind.None;
     var workOps = new ServerCapabilities.WorkspaceFoldersOptions(true, true);
     var workCap = new ServerCapabilities.WorkspaceServerCapabilities(workOps);
     cap.completionProvider = new ServerCapabilities.CompletionOptions(
-      true, Collections.singletonList("QWERTYUIOPASDFGHJKLZXCVBNM.qwertyuiopasdfghjklzxcvbnm+-*/_[]:"));
+      true, Collections.singletonList("QWERTYUIOPASDFGHJKLZXCVBNM.qwertyuiopasdfghjklzxcvbnm+-*/_[]:"),
+      Collections.emptyList());
     cap.workspace = workCap;
     cap.definitionProvider = true;
     cap.referencesProvider = true;
@@ -273,7 +281,7 @@ public class AyaLanguageServer implements LanguageServer {
               Log.d("Created new file: %s, mocked a library %s for it", newSrc, mock.mockConfig().name());
               libraries.append(mock);
             }
-            default -> {}
+            default -> { }
           }
         }
         case FileChangeType.Deleted -> {
@@ -283,7 +291,7 @@ public class AyaLanguageServer implements LanguageServer {
           switch (src.owner()) {
             case MutableLibraryOwner owner -> owner.removeLibrarySource(src);
             case WsLibrary owner -> libraries.removeIf(o -> o == owner);
-            default -> {}
+            default -> { }
           }
         }
       }
@@ -429,13 +437,13 @@ public class AyaLanguageServer implements LanguageServer {
   }
 
   @LspRequest("aya/computeType") @SuppressWarnings("unused")
-  public @NotNull ComputeTermResult computeType(ComputeTermResult.Params input) {
-    return computeTerm(input, ComputeTerm.Kind.type());
+  public @NotNull ComputeTypeResult computeType(ComputeTypeResult.Params input) {
+    return computeTerm(input, ComputeType.Kind.type());
   }
 
-  @LspRequest("aya/computeNF") @SuppressWarnings("unused")
-  public @NotNull ComputeTermResult computeNF(ComputeTermResult.Params input) {
-    return computeTerm(input, ComputeTerm.Kind.nf());
+  @LspRequest("aya/computeTypeNF") @SuppressWarnings("unused")
+  public @NotNull ComputeTypeResult computeTypeNF(ComputeTypeResult.Params input) {
+    return computeTerm(input, ComputeType.Kind.nf());
   }
 
   @LspRequest("aya/updateServerOptions") @SuppressWarnings("unused")
@@ -443,14 +451,14 @@ public class AyaLanguageServer implements LanguageServer {
     initializeOptions(options);
   }
 
-  public ComputeTermResult computeTerm(@NotNull ComputeTermResult.Params params, ComputeTerm.Kind type) {
+  public ComputeTypeResult computeTerm(@NotNull ComputeTypeResult.Params params, ComputeType.Kind type) {
     var source = find(params.uri);
-    if (source == null) return ComputeTermResult.bad(params);
+    if (source == null) return ComputeTypeResult.bad(params);
     var program = source.program().get();
-    if (program == null) return ComputeTermResult.bad(params);
-    var computer = new ComputeTerm(source, type, primFactory(source.owner()), LspRange.pos(params.position));
+    if (program == null) return ComputeTypeResult.bad(params);
+    var computer = new ComputeType(source, type, source.resolveInfo().get().makeTyckState(), LspRange.pos(params.position));
     program.forEach(computer);
-    return computer.result == null ? ComputeTermResult.bad(params) : ComputeTermResult.good(params, computer.result);
+    return computer.result == null ? ComputeTypeResult.bad(params) : ComputeTypeResult.good(params, computer.result);
   }
 
   private @NotNull String render(@NotNull Doc doc) {

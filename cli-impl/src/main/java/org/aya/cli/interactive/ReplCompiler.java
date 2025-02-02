@@ -1,8 +1,9 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.cli.interactive;
 
 import kala.collection.immutable.ImmutableSeq;
+import kala.collection.mutable.MutableList;
 import kala.control.Either;
 import kala.function.CheckedFunction;
 import kala.value.MutableValue;
@@ -10,34 +11,41 @@ import org.aya.cli.library.LibraryCompiler;
 import org.aya.cli.library.incremental.CompilerAdvisor;
 import org.aya.cli.library.json.LibraryConfigData;
 import org.aya.cli.library.source.LibraryOwner;
-import org.aya.cli.parse.AyaParserImpl;
 import org.aya.cli.single.CompilerFlags;
 import org.aya.cli.single.SingleAyaFile;
-import org.aya.concrete.Expr;
-import org.aya.concrete.GenericAyaFile;
-import org.aya.concrete.desugar.AyaBinOpSet;
-import org.aya.concrete.desugar.Desugarer;
-import org.aya.concrete.stmt.Stmt;
-import org.aya.core.def.FnDef;
-import org.aya.core.def.GenericDef;
-import org.aya.core.def.PrimDef;
-import org.aya.core.term.Term;
-import org.aya.generic.util.InterruptException;
-import org.aya.generic.util.NormalizeMode;
-import org.aya.ref.DefVar;
-import org.aya.resolve.ModuleCallback;
+import org.aya.cli.utils.LiterateData;
+import org.aya.generic.InterruptException;
+import org.aya.normalize.Normalizer;
+import org.aya.primitive.PrimFactory;
+import org.aya.primitive.ShapeFactory;
+import org.aya.producer.AyaParserImpl;
 import org.aya.resolve.ResolveInfo;
 import org.aya.resolve.context.EmptyContext;
-import org.aya.resolve.context.ModulePath;
+import org.aya.resolve.context.ModuleContext;
 import org.aya.resolve.context.PhysicalModuleContext;
 import org.aya.resolve.module.CachedModuleLoader;
 import org.aya.resolve.module.FileModuleLoader;
+import org.aya.resolve.module.ModuleCallback;
 import org.aya.resolve.module.ModuleListLoader;
+import org.aya.resolve.salt.AyaBinOpSet;
+import org.aya.resolve.salt.Desalt;
+import org.aya.resolve.visitor.ExprResolver;
+import org.aya.syntax.GenericAyaFile;
+import org.aya.syntax.concrete.Expr;
+import org.aya.syntax.concrete.stmt.Stmt;
+import org.aya.syntax.core.Jdg;
+import org.aya.syntax.core.def.PrimDef;
+import org.aya.syntax.core.def.TyckDef;
+import org.aya.syntax.core.term.Term;
+import org.aya.syntax.literate.CodeOptions.NormalizeMode;
+import org.aya.syntax.ref.AnyVar;
+import org.aya.syntax.ref.ModulePath;
 import org.aya.tyck.ExprTycker;
-import org.aya.tyck.Result;
-import org.aya.tyck.tycker.TyckState;
+import org.aya.tyck.TyckState;
+import org.aya.tyck.tycker.TeleTycker;
 import org.aya.util.error.SourceFileLocator;
 import org.aya.util.error.SourcePos;
+import org.aya.util.error.WithPos;
 import org.aya.util.reporter.CountingReporter;
 import org.aya.util.reporter.DelayedReporter;
 import org.aya.util.reporter.Problem;
@@ -48,53 +56,48 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.function.Function;
 
 public class ReplCompiler {
   public final @NotNull CountingReporter reporter;
+  public final @NotNull ImmutableSeq<Path> modulePaths;
+  public final @NotNull MutableList<ResolveInfo> imports = MutableList.create();
   private final @NotNull SourceFileLocator locator;
   private final @NotNull CachedModuleLoader<ModuleListLoader> loader;
   private final @NotNull ReplContext context;
-  private final @NotNull ImmutableSeq<Path> modulePaths;
-  private final @NotNull PrimDef.Factory primFactory;
+  private final @NotNull PrimFactory primFactory;
   private final @NotNull ReplShapeFactory shapeFactory;
   private final @NotNull GenericAyaFile.Factory fileManager;
   private final @NotNull AyaBinOpSet opSet;
+  private final @NotNull TyckState tcState;
 
-  public ReplCompiler(@NotNull ImmutableSeq<Path> modulePaths, @NotNull Reporter reporter, @Nullable SourceFileLocator locator) {
+  public ReplCompiler(
+    @NotNull ImmutableSeq<Path> modulePaths,
+    @NotNull Reporter delegateReporter,
+    @Nullable SourceFileLocator locator
+  ) {
     this.modulePaths = modulePaths;
-    this.reporter = CountingReporter.delegate(reporter);
+    reporter = CountingReporter.delegate(delegateReporter);
     this.locator = locator != null ? locator : new SourceFileLocator.Module(this.modulePaths);
-    this.primFactory = new PrimDef.Factory() {
-      @Override
-      public boolean suppressRedefinition() {
-        return true;
+    this.primFactory = new PrimFactory() {
+      @Override public boolean isForbiddenRedefinition(PrimDef.@NotNull ID id, boolean isJit) {
+        return false;
       }
     };
     this.shapeFactory = new ReplShapeFactory();
-    this.opSet = new AyaBinOpSet(this.reporter);
-    this.context = new ReplContext(new EmptyContext(this.reporter, Path.of("REPL")), ModulePath.of("REPL"));
-    this.fileManager = new SingleAyaFile.Factory(this.reporter);
-    var parser = new AyaParserImpl(this.reporter);
-    this.loader = new CachedModuleLoader<>(new ModuleListLoader(this.reporter, this.modulePaths.map(path ->
-      new FileModuleLoader(this.locator, path, this.reporter, parser, fileManager, primFactory, null))));
+    this.opSet = new AyaBinOpSet(reporter);
+    this.context = new ReplContext(reporter, new EmptyContext(reporter, Path.of("REPL")), ModulePath.of("REPL"));
+    this.fileManager = new SingleAyaFile.Factory(reporter);
+    var parser = new AyaParserImpl(reporter);
+    this.loader = new CachedModuleLoader<>(new ModuleListLoader(reporter, this.modulePaths.map(path ->
+      new FileModuleLoader(this.locator, path, reporter, parser, fileManager, primFactory))));
+    tcState = new TyckState(shapeFactory, primFactory);
   }
 
-  private @NotNull Result tyckExpr(@NotNull Expr expr) {
-    var resolvedExpr = expr.resolveLax(context);
-    // in case we have un-messaged TyckException
-    try (var delayedReporter = new DelayedReporter(reporter)) {
-      var tycker = new ExprTycker(primFactory, shapeFactory, delayedReporter, null);
-      var desugar = desugarExpr(resolvedExpr, delayedReporter);
-      return tycker.zonk(tycker.synthesize(desugar));
-    }
-  }
-
-  private @NotNull Expr desugarExpr(@NotNull Expr expr, @NotNull Reporter reporter) {
-    var resolveInfo = new ResolveInfo(primFactory, shapeFactory, opSet,
-      new EmptyContext(reporter, Path.of("dummy")).derive("dummy"),
-      ImmutableSeq.empty());
-    return new Desugarer(resolveInfo).apply(expr);
+  private @NotNull ExprResolver.LiterateResolved
+  desugarExpr(@NotNull ExprResolver.LiterateResolved expr, @NotNull Reporter reporter) {
+    var ctx = new EmptyContext(reporter, Path.of("dummy")).derive("dummy");
+    var resolveInfo = makeResolveInfo(ctx);
+    return expr.descent(new Desalt(resolveInfo));
   }
 
   public void loadToContext(@NotNull Path file) throws IOException {
@@ -107,8 +110,7 @@ public class ReplCompiler {
     try {
       var compiler = LibraryCompiler.newCompiler(primFactory, reporter, flags, CompilerAdvisor.onDisk(), libraryRoot);
       compiler.start();
-      var owner = compiler.libraryOwner();
-      importModule(owner);
+      importModule(compiler.libraryOwner());
     } catch (LibraryConfigData.BadConfig bad) {
       reporter.reportString("Cannot load malformed library: " + bad.getMessage(), Problem.Severity.ERROR);
     }
@@ -116,19 +118,23 @@ public class ReplCompiler {
 
   private void importModule(@NotNull LibraryOwner owner) {
     owner.librarySources()
-      .map(src -> src.resolveInfo().get().thisModule())
+      .map(src -> {
+        var info = src.resolveInfo().get();
+        imports.append(info);
+        return info.thisModule();
+      })
       .filterIsInstance(PhysicalModuleContext.class)
-      .forEach(mod -> context.importModule(mod.modulePath().asName(), mod, Stmt.Accessibility.Public, SourcePos.NONE));
+      .forEach(mod -> context.importModuleContext(mod.modulePath().asName(), mod, Stmt.Accessibility.Public, SourcePos.NONE));
     owner.libraryDeps().forEach(this::importModule);
   }
 
-  /** @see org.aya.cli.single.SingleFileCompiler#compile(Path, Function, CompilerFlags, ModuleCallback) */
+  /** @see org.aya.cli.single.SingleFileCompiler#compile(Path, ModuleCallback) */
   private void loadFile(@NotNull Path file) {
-    compileToContext(parser -> Either.left(fileManager.createAyaFile(locator, file).parseMe(parser)), NormalizeMode.WHNF);
+    compileToContext(parser -> Either.left(fileManager.createAyaFile(locator, file).parseMe(parser)), NormalizeMode.HEAD);
   }
 
   /** @param text the text of code to compile, witch might either be a `program` or an `expr`. */
-  public @NotNull Either<ImmutableSeq<GenericDef>, Term> compileToContext(@NotNull String text, @NotNull NormalizeMode normalizeMode) {
+  public @NotNull Either<ImmutableSeq<TyckDef>, Term> compileToContext(@NotNull String text, @NotNull NormalizeMode normalizeMode) {
     if (text.isBlank()) return Either.left(ImmutableSeq.empty());
     return compileToContext(parser -> parser.repl(text), normalizeMode);
   }
@@ -138,58 +144,92 @@ public class ReplCompiler {
    *
    * @see org.aya.cli.single.SingleFileCompiler#compile
    */
-  public @NotNull Either<ImmutableSeq<GenericDef>, Term> compileToContext(
-    @NotNull CheckedFunction<AyaParserImpl, Either<ImmutableSeq<Stmt>, Expr>, IOException> parsing,
+  public @NotNull Either<ImmutableSeq<TyckDef>, Term> compileToContext(
+    @NotNull CheckedFunction<AyaParserImpl, Either<ImmutableSeq<Stmt>, WithPos<Expr>>, IOException> parsing,
     @NotNull NormalizeMode normalizeMode
   ) {
     try {
       var parser = new AyaParserImpl(reporter);
-      var programOrExpr = parsing.apply(parser);
+      var programOrExpr = parsing.applyChecked(parser);
       return programOrExpr.map(
         program -> {
-          var newDefs = MutableValue.<ImmutableSeq<GenericDef>>create();
-          var resolveInfo = loader.resolveModule(primFactory, shapeFactory, opSet, context.fork(), program, loader);
+          var newDefs = MutableValue.<ImmutableSeq<TyckDef>>create();
+          var resolveInfo = makeResolveInfo(context.fork());
+          loader.resolveModule(resolveInfo, program, loader);
           resolveInfo.shapeFactory().discovered = shapeFactory.fork().discovered;
-          loader.tyckModule(null, resolveInfo, ((moduleResolve, defs) -> newDefs.set(defs)));
+          loader.tyckModule(resolveInfo, ((_, defs) -> newDefs.set(defs)));
           if (reporter.anyError()) return ImmutableSeq.empty();
           context.merge();
           shapeFactory.merge();
           return newDefs.get();
         },
-        expr -> tyckExpr(expr).wellTyped().normalize(new TyckState(primFactory), normalizeMode)
+        expr -> tyckAndNormalize(expr, false, normalizeMode)
       );
-    } catch (InterruptException ignored) {
+    } catch (InterruptException _) {
       // Only two kinds of interruptions are possible: parsing and resolving
+      return Either.left(ImmutableSeq.empty());
+    } catch (IOException e) {
+      reporter.reportString(e.getMessage());
       return Either.left(ImmutableSeq.empty());
     }
   }
 
-  public @Nullable Term computeType(@NotNull String text, @NotNull NormalizeMode normalizeMode) {
-    try {
-      var parseTree = new AyaParserImpl(reporter).repl(text);
-      if (parseTree.isLeft()) {
-        reporter.reportString("Expect expression, got statement", Problem.Severity.ERROR);
-        return null;
-      }
-      return tyckExpr(parseTree.getRightValue()).type().normalize(new TyckState(primFactory), normalizeMode);
-    } catch (InterruptException ignored) {
-      return null;
-    }
+  private @NotNull ResolveInfo makeResolveInfo(@NotNull ModuleContext ctx) {
+    var resolveInfo = new ResolveInfo(ctx, primFactory, shapeFactory, opSet);
+    imports.forEach(ii -> resolveInfo.imports().put(
+      ii.modulePath().asName(), new ResolveInfo.ImportInfo(ii, false)));
+    return resolveInfo;
   }
 
-  public @Nullable FnDef codificationObject(@NotNull String text) {
-    var parseTree = new AyaParserImpl(reporter).expr(text, SourcePos.NONE);
-    if (parseTree.resolveLax(context) instanceof Expr.Ref ref
-      && ref.resolvedVar() instanceof DefVar<?, ?> defVar
-      && defVar.core instanceof FnDef fn
-      && fn.body.isLeft()) {
-      return fn;
+  public @Nullable AnyVar parseToAnyVar(@NotNull String text) {
+    var parseTree = parseExpr(text);
+    if (parseTree == null) return null;
+    try {
+      if (ExprResolver.resolveLax(context, parseTree).expr().data() instanceof Expr.Ref unresolved)
+        return unresolved.var();
+    } catch (InterruptException _) {
     }
-    System.out.println(parseTree);
     return null;
   }
 
-  public @NotNull ReplContext getContext() {
-    return context;
+  public @Nullable Term computeType(@NotNull String text, NormalizeMode mode) {
+    try {
+      var expr = parseExpr(text);
+      if (expr == null) return null;
+      return tyckAndNormalize(expr, true, mode);
+    } catch (InterruptException _) {
+      return null;
+    }
+  }
+  private @Nullable WithPos<Expr> parseExpr(@NotNull String text) {
+    var parseTree = new AyaParserImpl(reporter).repl(text);
+    if (parseTree.isLeft()) {
+      reporter.reportString("Expect expression, got statement", Problem.Severity.ERROR);
+      return null;
+    }
+    return parseTree.getRightValue();
+  }
+
+  /** @param isType true means take the type, otherwise take the term. */
+  private @NotNull Term tyckAndNormalize(WithPos<Expr> expr, boolean isType, NormalizeMode mode) {
+    Jdg jdg = null;
+    var resolvedExpr = ExprResolver.resolveLax(context, expr);
+    if (mode == NormalizeMode.NULL) jdg = LiterateData.simpleVar(resolvedExpr.expr().data());
+    // in case we have un-messaged TyckException
+    if (jdg == null) try (var delayedReporter = new DelayedReporter(reporter)) {
+      tcState.clearTmp();
+      var desugar = desugarExpr(resolvedExpr, delayedReporter);
+      var tycker = new TeleTycker.InlineCode(new ExprTycker(tcState, delayedReporter, context.modulePath()));
+      jdg = tycker.checkInlineCode(desugar.params(), desugar.expr());
+    }
+    return new Normalizer(tcState).normalize(isType ? jdg.type() : jdg.wellTyped(), mode);
+  }
+
+  public @NotNull ReplContext getContext() { return context; }
+  public @NotNull ShapeFactory getShapeFactory() { return shapeFactory; }
+  public void loadPreludeIfPossible() {
+    if (loader.existsFileLevelModule(ModulePath.of("prelude"))) {
+      compileToContext("open import prelude", NormalizeMode.NULL);
+    }
   }
 }

@@ -1,13 +1,16 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.lsp.tester;
 
+import kala.collection.SeqView;
 import kala.collection.immutable.ImmutableSeq;
 import kala.tuple.Unit;
+import org.aya.cli.library.source.LibraryOwner;
 import org.aya.generic.Constants;
 import org.aya.ide.Resolver;
 import org.aya.lsp.server.AyaLanguageClient;
 import org.aya.lsp.server.AyaLanguageServer;
+import org.aya.syntax.ref.ModulePath;
 import org.javacs.lsp.DiagnosticSeverity;
 import org.javacs.lsp.InitializeParams;
 import org.javacs.lsp.PublishDiagnosticsParams;
@@ -29,8 +32,8 @@ public final class LspTestClient implements AyaLanguageClient {
     service.initialize(param);
   }
 
-  public void registerLibrary(@NotNull Path libraryRoot) {
-    service.registerLibrary(libraryRoot);
+  public SeqView<LibraryOwner> registerLibrary(@NotNull Path libraryRoot) {
+    return service.registerLibrary(libraryRoot);
   }
 
   public long loadLibraries() {
@@ -50,7 +53,7 @@ public final class LspTestClient implements AyaLanguageClient {
   private void executeOne(@NotNull TestCommand cmd) {
     switch (cmd) {
       case TestCommand.Mutate m -> {
-        var modName = ImmutableSeq.from(Constants.SCOPE_SEPARATOR_PATTERN.split(m.moduleName()));
+        var modName = new ModulePath(ImmutableSeq.from(Constants.SCOPE_SEPARATOR_PATTERN.split(m.moduleName())));
         var source = Resolver.resolveModule(service.libraries(), modName);
         Assertions.assertTrue(source.isDefined(), "Cannot mutate module " + m.moduleName());
         advisor.mutate(source.get());

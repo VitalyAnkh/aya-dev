@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.util.reporter;
 
@@ -19,8 +19,12 @@ public interface CountingReporter extends Reporter {
     return problemSize(Problem.Severity.WARN);
   }
 
+  default int goalSize() {
+    return problemSize(Problem.Severity.GOAL);
+  }
+
   default boolean noError() {
-    return errorSize() == 0;
+    return errorSize() == 0 && goalSize() == 0;
   }
 
   default boolean anyError() {
@@ -41,10 +45,7 @@ public interface CountingReporter extends Reporter {
     return new Delegated(reporter);
   }
 
-  record Delegated(
-    @NotNull Reporter delegated,
-    int @NotNull [] count
-  ) implements CountingReporter {
+  record Delegated(@NotNull Reporter delegated, int @NotNull [] count) implements CountingReporter {
     public Delegated(@NotNull Reporter delegated) {
       this(delegated, new int[Problem.Severity.class.getEnumConstants().length]);
     }

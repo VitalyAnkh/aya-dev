@@ -1,27 +1,23 @@
-// Copyright (c) 2020-2023 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2024 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.util.reporter;
 
 import kala.collection.Seq;
 import kala.collection.SeqView;
 import kala.collection.immutable.ImmutableSeq;
-import kala.tuple.Tuple;
 import org.aya.pretty.backend.terminal.UnixTermStyle;
 import org.aya.pretty.doc.Doc;
 import org.aya.pretty.doc.Style;
 import org.aya.pretty.doc.Styles;
-import org.aya.pretty.error.PrettyError;
 import org.aya.util.error.SourcePos;
 import org.aya.util.error.WithPos;
+import org.aya.util.error.pretty.PrettyError;
 import org.aya.util.prettier.PrettierOptions;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * @author ice1000
- */
 public interface Problem {
   enum Severity {
     ERROR,
@@ -52,15 +48,16 @@ public interface Problem {
   }
 
   default boolean isError() {
-    return level() == Severity.ERROR;
+    return level() == Severity.ERROR || level() == Severity.GOAL;
   }
 
-  default @NotNull PrettyError toPrettyError(@NotNull PrettierOptions options,
-                                             @NotNull PrettyError.FormatConfig prettyErrorConf) {
+  default @NotNull PrettyError toPrettyError(
+    @NotNull PrettierOptions options,
+    @NotNull PrettyError.FormatConfig prettyErrorConf
+  ) {
     var sourcePos = sourcePos();
     return new PrettyError(
-      sourcePos.file().display(),
-      sourcePos.toSpan(),
+      sourcePos,
       brief(options),
       prettyErrorConf,
       inlineHints(options).stream()
@@ -69,7 +66,7 @@ public interface Problem {
         .entrySet()
         .stream()
         .sorted(Map.Entry.comparingByKey())
-        .map(kv -> Tuple.of(kv.getKey().toSpan(), Doc.commaList(kv.getValue())))
+        .map(kv -> new PrettyError.PosDoc(kv.getKey(), Doc.commaList(kv.getValue())))
         .collect(ImmutableSeq.factory())
     );
   }
