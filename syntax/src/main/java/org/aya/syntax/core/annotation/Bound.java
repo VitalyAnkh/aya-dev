@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tesla (Yinsen) Zhang.
+// Copyright (c) 2020-2026 Tesla (Yinsen) Zhang.
 // Use of this source code is governed by the MIT license that can be found in the LICENSE.md file.
 package org.aya.syntax.core.annotation;
 
@@ -26,15 +26,18 @@ import java.lang.annotation.Target;
 ///  Typechecking(inherit)                      | false
 ///  Zonk                                       | true
 ///  Pretty print                               | true
-///  Instantiate `i`th index with [Closed] term | only if no other indices are involved (only if `i` is the outermost index)
+///  Instantiate `i`th index with [Closed] term | true
+///  Unfold a binding introducer (e.g. Lambda)  | false
 ///  Bind to an unoccupied index                | true
 ///  PatMatcher                                 | false
 ///
 /// [^1]: Although normalizer **can** safely normalize [Bound] term,
 ///       but we let it fails on [LocalTerm] to reveal potential bugs.
 ///       Thus, operations that depend on normalizer become not [Bound]-friendly.
-/// [^2]: This is not [Bound]-friendly cause `^0` is not the outermost index. In most case, this is the main reason
-///       that an operation is not [Bound]-friendly.
+/// [^2]: This is not [Bound]-friendly cause `(fn => ...)` is a binding introducer, the normalizing steps are
+///       `fn => (fn => ^1 ^0) 0` --okay-> `fn => (fn => ^1 0)` --not okay-> `fn => ^1 0`.
+///       Safely unfolding a binding introducer requires _shifting_ in dbi representation,
+///       which is what locally-nameless try to avoid.
 ///
 /// @see Closed
 @Retention(RetentionPolicy.SOURCE)
